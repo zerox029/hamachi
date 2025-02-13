@@ -16,7 +16,7 @@ fn main() {
             let _ = cat_file(pretty_print, &hash);
         },
         Command::HashObject { write, file } => {
-            hash_object(write, &file);
+            let _ = hash_object(write, &file);
         }
     }
 }
