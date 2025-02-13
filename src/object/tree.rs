@@ -15,13 +15,13 @@ pub(crate) fn ls_tree(_name_only: bool, hash: &str) -> std::io::Result<()> {
         let result = read_tree_entry(&mut tree).expect("error reading entry");
         read_bytes += result;
     }
-    
+
 
     Ok(())
 }
 fn read_tree_entry(tree: &mut Object) -> Result<usize, &'static str> {
     let mut read_bytes = 0;
-    
+
     let mut entry_buffer = Vec::new();
     tree.content_buffer_reader.read_until(b'\0', &mut entry_buffer).expect("error reading header");
     read_bytes += entry_buffer.len();
@@ -48,7 +48,7 @@ fn read_tree_entry(tree: &mut Object) -> Result<usize, &'static str> {
     };
 
     println!("{}", entry);
-    
+
     Ok(read_bytes)
 }
 
@@ -61,7 +61,7 @@ struct Entry {
 
 impl Display for Entry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{} {} {}    {}", self.mode as u32, self.object_type, self.hash, self.filename)
+        write!(f, "{:0>6} {} {}    {}", self.mode as u32, self.object_type, self.hash, self.filename)
     }
 }
 
