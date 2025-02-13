@@ -1,9 +1,10 @@
 mod cli;
-mod blob;
+mod object;
 
 use clap::Parser;
 use cli::{Args, Command};
-use blob::{cat_file, hash_object};
+use object::blob::{cat_file, hash_object};
+use object::tree::ls_tree;
 
 fn main() {
     let args = Args::parse();
@@ -17,6 +18,9 @@ fn main() {
         },
         Command::HashObject { write, file } => {
             let _ = hash_object(write, &file);
+        },
+        Command::LsTree { name_only, hash } => {
+            let _ = ls_tree(name_only, &hash);
         }
     }
 }

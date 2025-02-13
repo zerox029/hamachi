@@ -1,40 +1,21 @@
-use std::ffi::CStr;
 use std::fs;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Read, Write};
 use flate2::Compression;
-use flate2::read::ZlibDecoder;
 use flate2::write::ZlibEncoder;
 use sha1::{Digest, Sha1};
+use crate::object::{Object, ObjectType};
 
 /// Reads the content of the git blob object stored in .git/objects with the specified hash
 /// https://git-scm.com/docs/git-cat-file
 pub(crate) fn cat_file(_pretty_print: bool, hash: &str) -> std::io::Result<()> {
-    let subdirectory = &hash[..2];
-    let file_name = &hash[2..];
-    let file_path = format!(".git/objects/{}/{}", subdirectory, file_name);
-
-    let compressed_file = File::open(file_path)?;
-
-    let decompressor = ZlibDecoder::new(compressed_file);
-    let mut file_buffer_reader = BufReader::new(decompressor);
-    let mut file_buffer = Vec::new();
-
-    // Read the header
-    file_buffer_reader.read_until(b'\0', &mut file_buffer)?;
-    let header = CStr::from_bytes_with_nul(&file_buffer).expect("File header missing null byte");
-    let header = header.to_str().expect("File header contains invalid UTF-8");
-
-    let Some((ty, size)) = header.split_once(' ') else { panic!("File header missing space delimiter") };
-    assert_eq!(ty, "blob", "Object was not a blob");
-    let size = size.parse::<usize>().expect("File header invalid size");
+    let mut blob = Object::from_hash(hash).expect("error here lol");
+    assert_eq!(blob.header.object_type, ObjectType::BLOB, "Object was not a blob");
     
-    file_buffer.clear();
-    file_buffer.resize(size, 0);
-    file_buffer_reader.read_to_end(&mut file_buffer)?;
-
     // Read the rest of the file
-    let file_content = String::from_utf8(file_buffer).expect("File content is not valid UTF-8");
+    let mut content_buffer = Vec::new();
+    blob.content_buffer_reader.read_to_end(&mut content_buffer).expect("Couldn't read object file");
+    let file_content = String::from_utf8(content_buffer).expect("File content is not valid UTF-8");
     
     println!("{}", &file_content);
 

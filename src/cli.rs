@@ -21,5 +21,11 @@ pub(crate) enum Command {
         write: bool,
 
         file: String,
+    },
+    LsTree {
+        #[clap(long)]
+        name_only: bool,
+        
+        hash: String,
     }
 }
