@@ -1,20 +1,41 @@
-use std::{env, fs};
+use std::{fmt, fs};
+use std::fmt::Formatter;
 use std::io::Read;
+use clap::{Parser, Subcommand};
 use flate2::read::ZlibDecoder;
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    let command = &args[1];
-    
-    match command.as_str() {
-        "cat-file" => {
-            cat_file(&args[2])
-        }
-        _ => {}
+#[derive(Parser, Debug)]
+#[command(version, about, long_about = None)]
+struct Args {
+    #[command(subcommand)]
+    command: Command,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    Init,
+    CatFile {
+        #[clap(short = 'p')]
+        pretty_print: bool,
+
+        hash: String,
     }
 }
 
-fn cat_file(hash: &str) {
+fn main() {
+    let args = Args::parse();
+
+    match args.command {
+        Command::Init => {
+            
+        },
+        Command::CatFile { pretty_print, hash } => {
+            cat_file(pretty_print, &hash)
+        }
+    }
+}
+
+fn cat_file(pretty_print: bool, hash: &str) {
     let subdirectory = &hash[..2];
     let file_name = &hash[2..];
     
@@ -35,11 +56,16 @@ fn cat_file(hash: &str) {
 
     let blob = Blob{size: header[1].parse::<usize>().unwrap(), data: components[1].to_string()};
 
-    println!("size: {}", blob.size);
-    println!("data: {}", blob.data)
+    println!("{}", blob);
 }
 
 struct Blob {
     size: usize,
     data: String,
+}
+
+impl fmt::Display for Blob {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.data)
+    }
 }
