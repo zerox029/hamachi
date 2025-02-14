@@ -26,7 +26,6 @@ struct Header {
 enum ObjectType {
     BLOB,
     TREE,
-    COMMIT,
 }
 
 impl Object {
@@ -104,7 +103,6 @@ impl Display for ObjectType {
         write!(f,"{}", match self {
             ObjectType::BLOB => "blob",
             ObjectType::TREE => "tree",
-            ObjectType::COMMIT => "commit",
             _ => "unknown"
         })
     }

@@ -1,7 +1,6 @@
-use std::fs;
-use std::fs::{File, OpenOptions};
+use std::fs::{File};
 use std::io::{BufRead, BufReader, Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{PathBuf};
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use sha1::{Digest, Sha1};
@@ -9,7 +8,7 @@ use crate::object::{Object, ObjectType};
 
 /// Reads the content of the git blob object stored in .git/objects with the specified hash
 /// https://git-scm.com/docs/git-cat-file
-pub(crate) fn cat_file(_pretty_print: bool, hash: &str) -> std::io::Result<()> {
+pub(crate) fn cat_file(_pretty_print: bool, hash: &str) -> std::io::Result<String> {
     let mut blob = Object::from_hash(hash).expect("error here lol");
     assert_eq!(blob.header.object_type, ObjectType::BLOB, "Object was not a blob");
 
@@ -18,9 +17,7 @@ pub(crate) fn cat_file(_pretty_print: bool, hash: &str) -> std::io::Result<()> {
     blob.content_buffer_reader.read_to_end(&mut content_buffer).expect("Couldn't read object file");
     let file_content = String::from_utf8(content_buffer).expect("File content is not valid UTF-8");
 
-    println!("{}", &file_content);
-
-    Ok(())
+    Ok(file_content)
 }
 
 /// Generates a SHA1 hash for the specified file and writes its compressed version to the disk
@@ -59,4 +56,41 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<String
     }
 
     Ok(hash)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::process::Command;
+    use super::*;
+    #[test]
+    fn cat_file() {
+        // Setup
+        let test_file_path = "test_file.txt";
+        let _ = File::create(test_file_path);
+        fs::write(test_file_path, "this is some test content").unwrap();
+
+        let hash = Command::new("git").arg("hash-object").arg("-w").arg(test_file_path).output().unwrap();
+        let hash = String::from_utf8(hash.stdout).unwrap();
+        let hash = hash.trim();
+
+        let subdirectory = &hash[..2];
+        let file_name = &hash[2..];
+        
+        let from = format!(".git/objects/{}/{}", subdirectory, file_name.trim());
+        let to = format!(".hamachi/objects/{}/{}", subdirectory, file_name.trim());
+        fs::copy(from, to).unwrap();
+        
+        fs::copy(format!(".git/objects/{}/{}", subdirectory, file_name),
+                 format!(".hamachi/objects/{}/{}", subdirectory, file_name))
+            .unwrap();
+         
+        // Test
+        let expected = Command::new("git").arg("cat-file").arg(test_file_path).output().unwrap();
+        let expected = String::from_utf8(expected.stdout).unwrap();
+        
+        let actual = super::cat_file(false, &hash).unwrap();
+        
+        assert_eq!(expected, actual);
+    }
 }

@@ -16,7 +16,9 @@ fn main() {
 
         },
         Command::CatFile { pretty_print, hash } => {
-            let _ = cat_file(pretty_print, &hash);
+            let file_content = cat_file(pretty_print, &hash).unwrap();
+            
+            println!("{}", file_content)
         },
         Command::HashObject { write, file } => {
             let _ = hash_object(write, &PathBuf::from(file));
