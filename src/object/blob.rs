@@ -55,30 +55,7 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<String
     if write {
         let compressed_bytes = compressor.finish()?;
 
-        let subdirectory = &hash[..2];
-        let file_name = &hash[2..];
-        let file_path = &format!(".git/objects/{}/{}", subdirectory, file_name);
-        let file_path = Path::new(file_path);
-
-        fs::create_dir_all(format!(".git/objects/{}", subdirectory))?;
-
-        if file_path.exists() {
-            let mut perms = fs::metadata(&file_path)?.permissions();
-            perms.set_readonly(false);
-            fs::set_permissions(&file_path, perms)?;
-        }
-
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .open(file_path)?;
-
-        file.write_all(&compressed_bytes)?;
-
-        let mut perms = fs::metadata(&file_path)?.permissions();
-        perms.set_readonly(true);
-        fs::set_permissions(&file_path, perms)?;
+        Object::write_to_disk(&hash, &compressed_bytes)?;
     }
 
     Ok(hash)

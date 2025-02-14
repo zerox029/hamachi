@@ -1,10 +1,13 @@
 ﻿use std::cmp::PartialEq;
-use std::ffi::{CStr, OsStr};
-use std::fmt::{format, Display};
+use std::ffi::{CStr};
+use std::fmt::{Display};
 use std::fs;
-use std::io::{BufRead, Read};
+use std::io::{BufRead, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
+use flate2::Compression;
+use flate2::write::ZlibEncoder;
+use sha1::{Digest, Sha1};
 use crate::object::{Object, ObjectType};
 use crate::object::blob::hash_object;
 
@@ -83,7 +86,7 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<String> {
             entries.push(entry);
         }
         else {
-            if &path == &PathBuf::from("./.git") || &path == Path::new("./target") {
+            if &path == &PathBuf::from("./.git") || &path == Path::new("./target") || &path == Path::new("./hamachi") {
                 continue;
             }
 
@@ -109,9 +112,17 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<String> {
 
     let tree_content = format!("{}\0{}", header, entries_section);
 
-    println!("\n{}", tree_content);
-
-    Ok(String::from("a directory"))
+    let mut hasher = Sha1::new();
+    Digest::update(&mut hasher, &header);
+    let hash = hex::encode(hasher.finalize());
+    
+    let mut compressor = ZlibEncoder::new(Vec::new(), Compression::default());
+    compressor.write_all(&tree_content.into_bytes())?;
+    let compressed_bytes = compressor.finish()?;
+    
+    Object::write_to_disk(&hash, &compressed_bytes)?;
+    
+    Ok(hash)
 }
 
 #[derive(Debug)]

@@ -1,7 +1,9 @@
 ﻿use std::ffi::CStr;
 use std::fmt::{Display, Formatter};
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::fs;
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
+use std::path::Path;
 use std::str::FromStr;
 use flate2::read::ZlibDecoder;
 
@@ -31,7 +33,7 @@ impl Object {
     fn from_hash(hash: &str) -> Result<Object, &'static str> {
         let subdirectory = &hash[..2];
         let file_name = &hash[2..];
-        let file_path = format!(".git/objects/{}/{}", subdirectory, file_name);
+        let file_path = format!(".hamachi/objects/{}/{}", subdirectory, file_name);
 
         let compressed_file = File::open(file_path).expect("Can't open object file");
 
@@ -53,6 +55,35 @@ impl Object {
         file_buffer.resize(size, 0);
 
         Ok(Object{header, content_buffer_reader: file_buffer_reader})
+    }
+    
+    fn write_to_disk(hash: &str, content: &Vec<u8>) -> std::io::Result<()> {
+        let subdirectory = &hash[..2];
+        let file_name = &hash[2..];
+        let file_path = &format!(".hamachi/objects/{}/{}", subdirectory, file_name);
+        let file_path = Path::new(file_path);
+
+        fs::create_dir_all(format!(".hamachi/objects/{}", subdirectory))?;
+
+        if file_path.exists() {
+            let mut perms = fs::metadata(&file_path)?.permissions();
+            perms.set_readonly(false);
+            fs::set_permissions(&file_path, perms)?;
+        }
+
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(file_path)?;
+
+        file.write_all(&content)?;
+
+        let mut perms = fs::metadata(&file_path)?.permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&file_path, perms)?;
+        
+        Ok(())
     }
 }
 
