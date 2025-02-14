@@ -1,10 +1,15 @@
 ﻿use std::cmp::PartialEq;
-use std::ffi::CStr;
-use std::fmt::Display;
+use std::ffi::{CStr, OsStr};
+use std::fmt::{format, Display};
+use std::fs;
 use std::io::{BufRead, Read};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use crate::object::{Object, ObjectType};
+use crate::object::blob::hash_object;
 
+/// List the contents of a tree object with the specified hash
+/// https://git-scm.com/docs/git-ls-tree
 pub(crate) fn ls_tree(_name_only: bool, hash: &str) -> std::io::Result<()> {
     let mut tree = Object::from_hash(hash).expect("error here lol");
     assert_eq!(tree.header.object_type, ObjectType::TREE, "Object was not a tree");
@@ -12,14 +17,15 @@ pub(crate) fn ls_tree(_name_only: bool, hash: &str) -> std::io::Result<()> {
     // Read the rest of the file
     let mut read_bytes = 0;
     while read_bytes < tree.header.size {
-        let result = read_tree_entry(&mut tree).expect("error reading entry");
+        let result = print_current_tree_entry(&mut tree).expect("error reading entry");
         read_bytes += result;
     }
 
-
     Ok(())
 }
-fn read_tree_entry(tree: &mut Object) -> Result<usize, &'static str> {
+
+/// Prints the tree entry at the current position in the tree buffer reader
+fn print_current_tree_entry(tree: &mut Object) -> Result<usize, &'static str> {
     let mut read_bytes = 0;
 
     let mut entry_buffer = Vec::new();
@@ -52,6 +58,63 @@ fn read_tree_entry(tree: &mut Object) -> Result<usize, &'static str> {
     Ok(read_bytes)
 }
 
+pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<String> {
+    let path = path_buf.unwrap_or(PathBuf::from("."));
+
+    let paths_iter = fs::read_dir(&path)?;
+    let paths = paths_iter
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .collect::<Vec<_>>();
+
+    let mut entries = Vec::new();
+    for path in paths {
+        let metadata = fs::metadata(&path)?;
+
+        if metadata.is_file() {
+            let hash = hash_object(true, &path)?;
+
+            let entry = Entry{
+                mode: Mode::REGULAR,
+                filename: path.file_name().unwrap().to_string_lossy().to_string(),
+                object_type: ObjectType::BLOB,
+                hash,
+            };
+            entries.push(entry);
+        }
+        else {
+            if &path == &PathBuf::from("./.git") || &path == Path::new("./target") {
+                continue;
+            }
+
+            let hash = write_tree(Some(PathBuf::from(&path)))?;
+
+            let entry = Entry{
+                mode: Mode::REGULAR,
+                filename: path.file_name().unwrap().to_string_lossy().to_string(),
+                object_type: ObjectType::BLOB,
+                hash,
+            };
+            entries.push(entry);
+        }
+    }
+
+    let mut entry_strings = Vec::new();
+    for entry in entries {
+        let entry_string = format!("{} {}\0{}", entry.mode as u32, entry.filename, entry.hash);
+        entry_strings.push(entry_string);
+    }
+    let entries_section = entry_strings.join("");
+    let header = format!("tree {}\0{}", entry_strings.len(), entries_section);
+
+    let tree_content = format!("{}\0{}", header, entries_section);
+
+    println!("\n{}", tree_content);
+
+    Ok(String::from("a directory"))
+}
+
+#[derive(Debug)]
 struct Entry {
     mode: Mode,
     filename: String,
@@ -65,7 +128,7 @@ impl Display for Entry {
     }
 }
 
-#[derive(Clone, Copy, PartialOrd, PartialEq)]
+#[derive(Clone, Copy, PartialOrd, PartialEq, Debug)]
 enum Mode {
     REGULAR = 100644,
     EXECUTABLE = 100755,

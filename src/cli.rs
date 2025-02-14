@@ -25,7 +25,8 @@ pub(crate) enum Command {
     LsTree {
         #[clap(long)]
         name_only: bool,
-        
+
         hash: String,
-    }
+    },
+    WriteTree,
 }
