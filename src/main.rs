@@ -1,7 +1,8 @@
 mod cli;
 mod object;
 
-use std::path::PathBuf;
+use std::fs;
+use std::path::{Path, PathBuf};
 use clap::Parser;
 use cli::{Args, Command};
 use object::blob::{cat_file, hash_object};
@@ -13,7 +14,7 @@ fn main() {
 
     match args.command {
         Command::Init => {
-
+            let _ = init();
         },
         Command::CatFile { pretty_print, hash } => {
             let file_content = cat_file(pretty_print, &hash).unwrap();
@@ -30,4 +31,15 @@ fn main() {
             let _ = write_tree(None);
         }
     }
+}
+
+/// Initialize a new git repository
+/// https://git-scm.com/docs/git-init
+fn init() -> std::io::Result<()> {
+    fs::create_dir(Path::new(".hamachi"))?;
+    fs::create_dir(Path::new(".hamachi/objects"))?;
+    fs::create_dir_all(Path::new(".hamachi/refs/heads"))?;
+    fs::create_dir(Path::new(".hamachi/refs/tags"))?;
+    
+    Ok(())
 }

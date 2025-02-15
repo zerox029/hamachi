@@ -60,37 +60,78 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<String
 
 #[cfg(test)]
 mod tests {
-    use std::fs;
+    use std::{env, fs};
     use std::process::Command;
+    use crate::init;
     use super::*;
+
+    /// Creates and sets working directory in a temporary directory and initializes a git and hamachi repo in it
+    fn setup_test_environment() -> std::io::Result<PathBuf> {
+        // Create repo directory
+        let temp_dir = env::temp_dir();
+        let repo_name = srfng::Generator::new().generate();
+        let repo_path = PathBuf::from(temp_dir).join(repo_name);
+
+        fs::create_dir(&repo_path)?;
+
+        env::set_current_dir(&repo_path)?;
+
+        // Create git repo
+        Command::new("git").arg("init").output().expect("Failed to initialize git repo");
+        Command::new("git").arg("config").arg("gc.auto").arg("0").output().expect("Failed to disable git garbage collection");
+
+        // Create hamachi repo
+        init().expect("Failed to initialize hamachi repo");
+
+        Ok(repo_path)
+    }
+
+    fn run_git_command(command: &mut Command) -> std::io::Result<String> {
+        let output = command.output()?;
+        let captured_stdout = String::from_utf8(output.stdout).expect("output is not valid UTF-8");
+
+        Ok(captured_stdout.trim().to_string())
+    }
+
+    fn copy_git_object_file(hash: &str) -> std::io::Result<()> {
+        let subdirectory = &hash[..2];
+        let file_name = &hash[2..];
+
+        let from = PathBuf::from(".git/objects").join(subdirectory).join(file_name);
+        let to = PathBuf::from(".hamachi/objects").join(subdirectory).join(file_name);
+
+        let subdirectory = PathBuf::from(".hamachi/objects").join(subdirectory);
+        if !fs::exists(&subdirectory)? {
+            fs::create_dir(&subdirectory)?;
+        }
+        
+        fs::copy(from, to).expect("Couldn't copy object file");
+
+        Ok(())
+    }
+
     #[test]
     fn cat_file() {
         // Setup
+        let repo = setup_test_environment().unwrap();
+
         let test_file_path = "test_file.txt";
         let _ = File::create(test_file_path);
         fs::write(test_file_path, "this is some test content").unwrap();
 
-        let hash = Command::new("git").arg("hash-object").arg("-w").arg(test_file_path).output().unwrap();
-        let hash = String::from_utf8(hash.stdout).unwrap();
-        let hash = hash.trim();
+        let hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(test_file_path))
+            .expect("Failed to hash object");
 
-        let subdirectory = &hash[..2];
-        let file_name = &hash[2..];
-        
-        let from = format!(".git/objects/{}/{}", subdirectory, file_name.trim());
-        let to = format!(".hamachi/objects/{}/{}", subdirectory, file_name.trim());
-        fs::copy(from, to).unwrap();
-        
-        fs::copy(format!(".git/objects/{}/{}", subdirectory, file_name),
-                 format!(".hamachi/objects/{}/{}", subdirectory, file_name))
-            .unwrap();
-         
+        copy_git_object_file(&hash).unwrap();
+
         // Test
-        let expected = Command::new("git").arg("cat-file").arg(test_file_path).output().unwrap();
-        let expected = String::from_utf8(expected.stdout).unwrap();
-        
+        let expected = run_git_command(Command::new("git").arg("cat-file").arg("blob").arg(&hash))
+            .expect("Failed to cat file");
         let actual = super::cat_file(false, &hash).unwrap();
-        
+
         assert_eq!(expected, actual);
+
+        env::set_current_dir("..").unwrap();
+        fs::remove_dir_all(&repo).unwrap()
     }
 }
