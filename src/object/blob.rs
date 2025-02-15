@@ -62,6 +62,7 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<String
 mod tests {
     use std::{env, fs};
     use std::process::Command;
+    use rusty_fork::rusty_fork_test;
     use crate::init;
     use super::*;
 
@@ -110,28 +111,54 @@ mod tests {
         Ok(())
     }
 
-    #[test]
-    fn cat_file() {
-        // Setup
-        let repo = setup_test_environment().unwrap();
+    rusty_fork_test! {
+        #[test]
+        fn cat_file() {
+            // Setup
+            let repo = setup_test_environment().unwrap();
 
-        let test_file_path = "test_file.txt";
-        let _ = File::create(test_file_path);
-        fs::write(test_file_path, "this is some test content").unwrap();
+            let test_file_path = "test_file.txt";
+            let _ = File::create(test_file_path);
+            fs::write(test_file_path, "this is some test content").unwrap();
 
-        let hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(test_file_path))
-            .expect("Failed to hash object");
+            let hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(test_file_path))
+                .expect("Failed to hash object");
 
-        copy_git_object_file(&hash).unwrap();
+            copy_git_object_file(&hash).unwrap();
 
-        // Test
-        let expected = run_git_command(Command::new("git").arg("cat-file").arg("blob").arg(&hash))
-            .expect("Failed to cat file");
-        let actual = super::cat_file(false, &hash).unwrap();
+            // Test
+            let expected = run_git_command(Command::new("git").arg("cat-file").arg("blob").arg(&hash))
+                .expect("Failed to cat file");
+            let actual = super::cat_file(false, &hash).unwrap();
 
-        assert_eq!(expected, actual);
+            assert_eq!(expected, actual);
 
-        env::set_current_dir("..").unwrap();
-        fs::remove_dir_all(&repo).unwrap()
+            env::set_current_dir("..").unwrap();
+            fs::remove_dir_all(&repo).unwrap();
+        }
+
+        #[test]
+        fn cat_empty_file() {
+            // Setup
+            let repo = setup_test_environment().unwrap();
+
+            let test_file_path = "test_file.txt";
+            let _ = File::create(test_file_path);
+
+            let hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(test_file_path))
+                .expect("Failed to hash object");
+
+            copy_git_object_file(&hash).unwrap();
+
+            // Test
+            let expected = run_git_command(Command::new("git").arg("cat-file").arg("blob").arg(&hash))
+                .expect("Failed to cat file");
+            let actual = super::cat_file(false, &hash).unwrap();
+
+            assert_eq!(expected, actual);
+
+            env::set_current_dir("..").unwrap();
+            fs::remove_dir_all(&repo).unwrap();
+        }
     }
 }
