@@ -61,7 +61,9 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<String
 #[cfg(test)]
 mod tests {
     use std::{env, fs};
+    use std::path::Path;
     use std::process::Command;
+    use file_diff::diff_files;
     use rusty_fork::rusty_fork_test;
     use crate::init;
     use super::*;
@@ -95,18 +97,24 @@ mod tests {
     }
 
     fn copy_git_object_file(hash: &str) -> std::io::Result<()> {
-        let subdirectory = &hash[..2];
-        let file_name = &hash[2..];
+        let (subdirectory, file_name) = Object::get_path_from_hash(hash).expect("Invalid hash");
 
         let from = PathBuf::from(".git/objects").join(subdirectory).join(file_name);
         let to = PathBuf::from(".hamachi/objects").join(subdirectory).join(file_name);
 
-        let subdirectory = PathBuf::from(".hamachi/objects").join(subdirectory);
+        let subdirectory = PathBuf::from(".hamachi/objects").join(&subdirectory);
         if !fs::exists(&subdirectory)? {
             fs::create_dir(&subdirectory)?;
         }
         
         fs::copy(from, to).expect("Couldn't copy object file");
+
+        Ok(())
+    }
+
+    fn teardown(repo: PathBuf) -> std::io::Result<()> {
+        env::set_current_dir("..")?;
+        fs::remove_dir_all(&repo)?;
 
         Ok(())
     }
@@ -118,7 +126,7 @@ mod tests {
             let repo = setup_test_environment().unwrap();
 
             let test_file_path = "test_file.txt";
-            let _ = File::create(test_file_path);
+            let _ = File::create(test_file_path).unwrap();
             fs::write(test_file_path, "this is some test content").unwrap();
 
             let hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(test_file_path))
@@ -133,17 +141,18 @@ mod tests {
 
             assert_eq!(expected, actual);
 
-            env::set_current_dir("..").unwrap();
-            fs::remove_dir_all(&repo).unwrap();
+            teardown(repo).unwrap();
         }
+    }
 
-        #[test]
+    rusty_fork_test! {
+       #[test]
         fn cat_empty_file() {
             // Setup
             let repo = setup_test_environment().unwrap();
 
             let test_file_path = "test_file.txt";
-            let _ = File::create(test_file_path);
+            File::create(test_file_path).unwrap();
 
             let hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(test_file_path))
                 .expect("Failed to hash object");
@@ -157,8 +166,51 @@ mod tests {
 
             assert_eq!(expected, actual);
 
-            env::set_current_dir("..").unwrap();
-            fs::remove_dir_all(&repo).unwrap();
-        }
+            teardown(repo).unwrap();
+        } 
+    }
+    
+    rusty_fork_test! {
+       #[test]
+        fn hash_object_no_write() {
+            // Setup
+            let repo = setup_test_environment().unwrap();
+
+            let test_file_path = "test_file.txt";
+            File::create(test_file_path).unwrap();
+
+            // Test
+            let expected = run_git_command(Command::new("git").arg("hash-object").arg(test_file_path)).unwrap();
+            let actual = hash_object(false, &PathBuf::from(test_file_path)).unwrap();
+
+            assert_eq!(expected, actual);
+            assert!(Path::new(".hamachi/objects").read_dir().unwrap().next().is_none());
+
+            teardown(repo).unwrap();
+        } 
+    }
+        
+    rusty_fork_test! {
+       #[test]
+        fn hash_object_write() {
+            // Setup
+            let repo = setup_test_environment().unwrap();
+
+            let test_file_name = "test_file.txt";
+            File::create(test_file_name).unwrap();
+
+            // Test
+            let expected_hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(test_file_name)).unwrap();
+            let actual_hash = hash_object(true, &PathBuf::from(test_file_name)).unwrap();
+
+            let (subdirectory, file_name) = Object::get_path_from_hash(&actual_hash).unwrap();
+            dbg!(subdirectory, file_name);
+            let mut expected_file = File::open(PathBuf::from(".git/objects").join(subdirectory).join(file_name)).expect("Git object file not found");
+            let mut actual_file = File::open(PathBuf::from(".hamachi/objects").join(subdirectory).join(file_name)).expect("Hamachi object file not found");
+
+            
+            assert_eq!(expected_hash, actual_hash);
+            assert!(diff_files(&mut expected_file, &mut actual_file))
+        } 
     }
 }

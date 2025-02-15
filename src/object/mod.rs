@@ -30,8 +30,7 @@ enum ObjectType {
 
 impl Object {
     fn from_hash(hash: &str) -> Result<Object, &'static str> {
-        let subdirectory = &hash[..2];
-        let file_name = &hash[2..];
+        let (subdirectory, file_name) = Self::get_path_from_hash(hash).expect("Invalid hash");
         let file_path = format!(".hamachi/objects/{}/{}", subdirectory, file_name);
 
         let compressed_file = File::open(file_path).expect("Can't open object file");
@@ -57,8 +56,7 @@ impl Object {
     }
     
     fn write_to_disk(hash: &str, content: &Vec<u8>) -> std::io::Result<()> {
-        let subdirectory = &hash[..2];
-        let file_name = &hash[2..];
+        let (subdirectory, file_name) = Self::get_path_from_hash(hash).expect("Invalid hash");
         let file_path = &format!(".hamachi/objects/{}/{}", subdirectory, file_name);
         let file_path = Path::new(file_path);
 
@@ -83,6 +81,13 @@ impl Object {
         fs::set_permissions(&file_path, perms)?;
         
         Ok(())
+    }
+    
+    pub fn get_path_from_hash(hash: &str) -> std::io::Result<(&str, &str)> {
+        let subdirectory = &hash[..2];
+        let file_name = &hash[2..];
+        
+        Ok((subdirectory, file_name))
     }
 }
 
