@@ -34,6 +34,10 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<String
     Digest::update(&mut hasher, &header);
 
     let mut compressor = ZlibEncoder::new(Vec::new(), Compression::default());
+    if write {
+        compressor.write(&header.as_bytes())?;
+    }
+
     let reader = BufReader::new(uncompressed_file);
     for line in reader.lines() {
         let line = line?;
@@ -42,7 +46,7 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<String
 
         // ZLib compression if the write flag is used
         if write {
-            compressor.write_all(&line.as_bytes())?;
+            compressor.write(&line.as_bytes())?;
         }
     }
 
@@ -64,6 +68,7 @@ mod tests {
     use std::path::Path;
     use std::process::Command;
     use file_diff::diff_files;
+    use flate2::read::ZlibDecoder;
     use rusty_fork::rusty_fork_test;
     use crate::init;
     use super::*;
@@ -72,7 +77,7 @@ mod tests {
     fn setup_test_environment() -> std::io::Result<PathBuf> {
         // Create repo directory
         let temp_dir = env::temp_dir();
-        let repo_name = srfng::Generator::new().generate();
+        let repo_name = format!("hamachi-{}", srfng::Generator::new().generate());
         let repo_path = PathBuf::from(temp_dir).join(repo_name);
 
         fs::create_dir(&repo_path)?;
@@ -167,9 +172,9 @@ mod tests {
             assert_eq!(expected, actual);
 
             teardown(repo).unwrap();
-        } 
+        }
     }
-    
+
     rusty_fork_test! {
        #[test]
         fn hash_object_no_write() {
@@ -187,9 +192,9 @@ mod tests {
             assert!(Path::new(".hamachi/objects").read_dir().unwrap().next().is_none());
 
             teardown(repo).unwrap();
-        } 
+        }
     }
-        
+
     rusty_fork_test! {
        #[test]
         fn hash_object_write() {
@@ -197,20 +202,24 @@ mod tests {
             let repo = setup_test_environment().unwrap();
 
             let test_file_name = "test_file.txt";
+            let test_file_content = "this is some test content";
             File::create(test_file_name).unwrap();
+            fs::write(test_file_name, test_file_content).unwrap();
 
             // Test
             let expected_hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(test_file_name)).unwrap();
             let actual_hash = hash_object(true, &PathBuf::from(test_file_name)).unwrap();
 
             let (subdirectory, file_name) = Object::get_path_from_hash(&actual_hash).unwrap();
-            dbg!(subdirectory, file_name);
-            let mut expected_file = File::open(PathBuf::from(".git/objects").join(subdirectory).join(file_name)).expect("Git object file not found");
-            let mut actual_file = File::open(PathBuf::from(".hamachi/objects").join(subdirectory).join(file_name)).expect("Hamachi object file not found");
+            let expected_file = File::open(PathBuf::from(".git/objects").join(subdirectory).join(file_name)).expect("Git object file not found");
+            let actual_file = File::open(PathBuf::from(".hamachi/objects").join(subdirectory).join(file_name)).expect("Hamachi object file not found");
+            let mut expected_file_content = String::new();
+            let mut actual_file_content = String::new();
+            ZlibDecoder::new(expected_file).read_to_string(&mut expected_file_content).unwrap();
+            ZlibDecoder::new(actual_file).read_to_string(&mut actual_file_content).unwrap();
 
-            
             assert_eq!(expected_hash, actual_hash);
-            assert!(diff_files(&mut expected_file, &mut actual_file))
-        } 
+            assert_eq!(expected_file_content, actual_file_content);
+        }
     }
 }

@@ -2,6 +2,7 @@ mod cli;
 mod object;
 
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use clap::Parser;
 use cli::{Args, Command};
@@ -18,11 +19,13 @@ fn main() {
         },
         Command::CatFile { pretty_print, hash } => {
             let file_content = cat_file(pretty_print, &hash).unwrap();
-            
-            println!("{}", file_content)
+
+            println!("{:?}", file_content)
         },
         Command::HashObject { write, file } => {
-            let _ = hash_object(write, &PathBuf::from(file));
+            let hash = hash_object(write, &PathBuf::from(file)).unwrap();
+
+            println!("{}", hash)
         },
         Command::LsTree { name_only, hash } => {
             let _ = ls_tree(name_only, &hash);
