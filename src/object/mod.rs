@@ -11,7 +11,7 @@ pub mod blob;
 pub mod tree;
 
 #[derive(Debug)]
-struct Object {
+pub(crate) struct Object {
     header: Header,
     content_buffer_reader: BufReader<ZlibDecoder<File>>,
 }
@@ -108,7 +108,6 @@ impl Display for ObjectType {
         write!(f,"{}", match self {
             ObjectType::BLOB => "blob",
             ObjectType::TREE => "tree",
-            _ => "unknown"
         })
     }
 }

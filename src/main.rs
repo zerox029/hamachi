@@ -1,8 +1,8 @@
 mod cli;
 mod object;
+mod test_utils;
 
 use std::fs;
-use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 use clap::Parser;
 use cli::{Args, Command};
@@ -28,7 +28,9 @@ fn main() {
             println!("{}", hash)
         },
         Command::LsTree { name_only, hash } => {
-            let _ = ls_tree(name_only, &hash);
+            let tree_content = ls_tree(name_only, &hash).unwrap();
+            
+            println!("{}", tree_content)
         },
         Command::WriteTree => {
             let _ = write_tree(None);

@@ -13,23 +13,27 @@ use crate::object::blob::hash_object;
 
 /// List the contents of a tree object with the specified hash
 /// https://git-scm.com/docs/git-ls-tree
-pub(crate) fn ls_tree(_name_only: bool, hash: &str) -> std::io::Result<()> {
+pub(crate) fn ls_tree(_name_only: bool, hash: &str) -> std::io::Result<String> {
     let mut tree = Object::from_hash(hash).expect("error here lol");
     assert_eq!(tree.header.object_type, ObjectType::TREE, "Object was not a tree");
 
     // Read the rest of the file
     let mut read_bytes = 0;
+    let mut result = String::new();
     while read_bytes < tree.header.size {
-        let result = print_current_tree_entry(&mut tree).expect("error reading entry");
-        read_bytes += result;
+        let (entry, size) = get_current_tree_entry(&mut tree).expect("error reading entry");
+        read_bytes += size;
+        
+        result.push_str(entry.to_string().as_str());
     }
 
-    Ok(())
+    Ok(result)
 }
 
-/// Prints the tree entry at the current position in the tree buffer reader
-fn print_current_tree_entry(tree: &mut Object) -> Result<usize, &'static str> {
+/// Returns the tree entry at the current position in the tree buffer reader and its size in bytes
+fn get_current_tree_entry(tree: &mut Object) -> Result<(Entry, usize), &'static str> {
     let mut read_bytes = 0;
+    let entry = String::new();
 
     let mut entry_buffer = Vec::new();
     tree.content_buffer_reader.read_until(b'\0', &mut entry_buffer).expect("error reading header");
@@ -58,7 +62,7 @@ fn print_current_tree_entry(tree: &mut Object) -> Result<usize, &'static str> {
 
     println!("{}", entry);
 
-    Ok(read_bytes)
+    Ok((entry, read_bytes))
 }
 
 pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<String> {
@@ -135,7 +139,7 @@ struct Entry {
 
 impl Display for Entry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:0>6} {} {}    {}", self.mode as u32, self.object_type, self.hash, self.filename)
+        write!(f, "{:0>6} {} {}\t{}", self.mode as u32, self.object_type, self.hash, self.filename)
     }
 }
 
@@ -158,5 +162,42 @@ impl FromStr for Mode {
             "40000" => Ok(Mode::DIRECTORY),
             _ => Err(()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::fs::File;
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    use rusty_fork::rusty_fork_test;
+    use crate::object::tree::ls_tree;
+    use crate::test_utils::{copy_git_object_file, run_git_command, run_git_command_piped_input, setup_test_environment};
+
+        #[test]
+        fn ls_tree_blob_only() {
+            // Setup
+            setup_test_environment().unwrap();
+
+            let test_file_path = "test.txt";
+            let test_file = File::create(&test_file_path).unwrap();
+            fs::write(&test_file_path, "this is some test content").unwrap();
+
+            let file_hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(&test_file_path))
+                .expect("Failed to hash object");
+
+            let entry = format!("100644 blob {file_hash}\t{test_file_path}");
+            let mktree_command = Command::new("git").arg("mktree").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
+            let tree_hash = run_git_command_piped_input(mktree_command, entry).unwrap();
+            
+            copy_git_object_file(&file_hash).unwrap();
+            copy_git_object_file(&tree_hash).unwrap();
+
+            // Test
+            let expected = run_git_command(Command::new("git").arg("ls-tree").arg(&tree_hash)).unwrap();
+            let actual = ls_tree(false, &tree_hash).unwrap();
+            
+            assert_eq!(expected, actual);
     }
 }

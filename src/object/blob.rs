@@ -64,65 +64,14 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<String
 
 #[cfg(test)]
 mod tests {
-    use std::{env, fs};
+    use std::{fs};
     use std::path::Path;
     use std::process::Command;
-    use file_diff::diff_files;
     use flate2::read::ZlibDecoder;
     use rusty_fork::rusty_fork_test;
-    use crate::init;
+    use crate::test_utils::*;
     use super::*;
 
-    /// Creates and sets working directory in a temporary directory and initializes a git and hamachi repo in it
-    fn setup_test_environment() -> std::io::Result<PathBuf> {
-        // Create repo directory
-        let temp_dir = env::temp_dir();
-        let repo_name = format!("hamachi-{}", srfng::Generator::new().generate());
-        let repo_path = PathBuf::from(temp_dir).join(repo_name);
-
-        fs::create_dir(&repo_path)?;
-
-        env::set_current_dir(&repo_path)?;
-
-        // Create git repo
-        Command::new("git").arg("init").output().expect("Failed to initialize git repo");
-        Command::new("git").arg("config").arg("gc.auto").arg("0").output().expect("Failed to disable git garbage collection");
-
-        // Create hamachi repo
-        init().expect("Failed to initialize hamachi repo");
-
-        Ok(repo_path)
-    }
-
-    fn run_git_command(command: &mut Command) -> std::io::Result<String> {
-        let output = command.output()?;
-        let captured_stdout = String::from_utf8(output.stdout).expect("output is not valid UTF-8");
-
-        Ok(captured_stdout.trim().to_string())
-    }
-
-    fn copy_git_object_file(hash: &str) -> std::io::Result<()> {
-        let (subdirectory, file_name) = Object::get_path_from_hash(hash).expect("Invalid hash");
-
-        let from = PathBuf::from(".git/objects").join(subdirectory).join(file_name);
-        let to = PathBuf::from(".hamachi/objects").join(subdirectory).join(file_name);
-
-        let subdirectory = PathBuf::from(".hamachi/objects").join(&subdirectory);
-        if !fs::exists(&subdirectory)? {
-            fs::create_dir(&subdirectory)?;
-        }
-        
-        fs::copy(from, to).expect("Couldn't copy object file");
-
-        Ok(())
-    }
-
-    fn teardown(repo: PathBuf) -> std::io::Result<()> {
-        env::set_current_dir("..")?;
-        fs::remove_dir_all(&repo)?;
-
-        Ok(())
-    }
 
     rusty_fork_test! {
         #[test]
@@ -220,6 +169,8 @@ mod tests {
 
             assert_eq!(expected_hash, actual_hash);
             assert_eq!(expected_file_content, actual_file_content);
+            
+            teardown(repo).unwrap()
         }
     }
 }
