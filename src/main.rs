@@ -23,7 +23,7 @@ fn main() {
             println!("{:?}", file_content)
         },
         Command::HashObject { write, file } => {
-            let hash = hex::encode(hash_object(write, &PathBuf::from(file)).unwrap());
+            let hash = hash_object(write, &PathBuf::from(file)).unwrap().to_string();
 
             println!("{hash}")
         },
@@ -33,7 +33,7 @@ fn main() {
             println!("{tree_content}")
         },
         Command::WriteTree => {
-            let tree_hash = hex::encode(write_tree(None).unwrap());
+            let tree_hash = write_tree(None).unwrap().to_string();
             
             println!("{tree_hash}");
         }

@@ -125,7 +125,8 @@ impl Display for ObjectType {
     }
 }
 
-struct Hash(Vec<u8>);
+#[derive(Debug)]
+pub struct Hash(Vec<u8>);
 impl ToString for Hash {
     fn to_string(&self) -> String {
         hex::encode(&self.0)

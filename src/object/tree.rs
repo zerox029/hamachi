@@ -8,7 +8,7 @@ use std::str::FromStr;
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use sha1::{Digest, Sha1};
-use crate::object::{Object, ObjectType};
+use crate::object::{Hash, Object, ObjectType};
 use crate::object::blob::hash_object;
 
 /// List the contents of a tree object with the specified hash
@@ -33,7 +33,6 @@ pub(crate) fn ls_tree(_name_only: bool, hash: &str) -> std::io::Result<String> {
 /// Returns the tree entry at the current position in the tree buffer reader and its size in bytes
 fn get_current_tree_entry(tree: &mut Object) -> Result<(Entry, usize), &'static str> {
     let mut read_bytes = 0;
-    let entry = String::new();
 
     let mut entry_buffer = Vec::new();
     tree.content_buffer_reader.read_until(b'\0', &mut entry_buffer).expect("error reading header");
@@ -57,15 +56,13 @@ fn get_current_tree_entry(tree: &mut Object) -> Result<(Entry, usize), &'static 
         mode,
         filename: file_name.to_string(),
         object_type: if mode == Mode::DIRECTORY { ObjectType::TREE } else { ObjectType::BLOB },
-        hash: entry_buffer,
+        hash: Hash(entry_buffer),
     };
-
-    println!("{}", entry);
 
     Ok((entry, read_bytes))
 }
 
-pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Vec<u8>> {
+pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Hash> {
     let path = path_buf.unwrap_or(PathBuf::from("."));
 
     let paths_iter = fs::read_dir(&path)?;
@@ -79,7 +76,7 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Vec<u8>> 
         let metadata = fs::metadata(&path)?;
 
         if metadata.is_file() {
-            let hash = hash_object(true, &path)?;
+            let hash: Hash = hash_object(true, &path)?;
 
             let entry = Entry{
                 mode: Mode::REGULAR,
@@ -110,7 +107,7 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Vec<u8>> 
     for mut entry in entries {
         println!("{}", entry);
         let mut entry_bytes = format!("{} {}\0", entry.mode as u32, entry.filename).as_bytes().to_vec();
-        entry_bytes.append(&mut entry.hash);
+        entry_bytes.append(&mut entry.hash.0);
 
         entry_byte_vectors.push(entry_bytes);
     }
@@ -121,14 +118,14 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Vec<u8>> 
     let mut hasher = Sha1::new();
     Digest::update(&mut hasher, &header);
     Digest::update(&mut hasher, &entries_section);
-    let hash = hasher.finalize().as_slice().to_vec();
+    let hash = Hash(hasher.finalize().as_slice().to_vec());
     
     let mut compressor = ZlibEncoder::new(Vec::new(), Compression::default());
     compressor.write_all(&header)?;
     compressor.write_all(&entries_section)?;
     let compressed_bytes = compressor.finish()?;
     
-    Object::write_to_disk(&hex::encode(&hash), &compressed_bytes)?;
+    Object::write_to_disk(&hash.to_string(), &compressed_bytes)?;
     
     Ok(hash)
 }
@@ -138,12 +135,12 @@ struct Entry {
     mode: Mode,
     filename: String,
     object_type: ObjectType,
-    hash: Vec<u8>,
+    hash: Hash,
 }
 
 impl Display for Entry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:0>6} {} {}\t{}", self.mode as u32, self.object_type, hex::encode(&self.hash), self.filename)
+        write!(f, "{:0>6} {} {}\t{}", self.mode as u32, self.object_type, &self.hash.to_string(), self.filename)
     }
 }
 
@@ -226,7 +223,7 @@ mod tests {
 
             // Test
             let expected_tree_hash = run_git_command(Command::new("git").arg("write-tree")).unwrap();
-            let actual_tree_hash = hex::encode(write_tree(None).unwrap());
+            let actual_tree_hash = write_tree(None).unwrap().to_string();
 
             let actual_tree_content = Object::decompress_object(&actual_tree_hash, false).unwrap();
             let expected_tree_content = Object::decompress_object(&expected_tree_hash, true).unwrap();
@@ -261,7 +258,7 @@ mod tests {
             
             // Test
             let expected_tree_hash = run_git_command(Command::new("git").arg("write-tree")).unwrap();
-            let actual_tree_hash = hex::encode(write_tree(None).unwrap());
+            let actual_tree_hash = write_tree(None).unwrap().to_string();
 
             let actual_tree_content = Object::decompress_object(&actual_tree_hash, false).unwrap();
             let expected_tree_content = Object::decompress_object(&expected_tree_hash, true).unwrap();
@@ -269,8 +266,10 @@ mod tests {
             println!("{}", repo.to_str().unwrap());
             println!("{}", expected_tree_hash);
 
-            // assert_eq!(expected_tree_hash, actual_tree_hash);
+            assert_eq!(expected_tree_hash, actual_tree_hash);
             assert_eq!(expected_tree_content, actual_tree_content);
+            
+            teardown(repo).unwrap();
         }
     }
 }

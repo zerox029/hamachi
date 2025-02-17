@@ -4,7 +4,7 @@ use std::path::{PathBuf};
 use flate2::Compression;
 use flate2::write::ZlibEncoder;
 use sha1::{Digest, Sha1};
-use crate::object::{Object, ObjectType};
+use crate::object::{Hash, Object, ObjectType};
 
 /// Reads the content of the git blob object stored in .git/objects with the specified hash
 /// https://git-scm.com/docs/git-cat-file
@@ -23,7 +23,7 @@ pub(crate) fn cat_file(_pretty_print: bool, hash: &str) -> std::io::Result<Strin
 /// Generates a SHA1 hash for the specified file and writes its compressed version to the disk
 /// if the w flag is used.
 /// https://git-scm.com/docs/git-hash-object
-pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<Vec<u8>> {
+pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<Hash> {
     let uncompressed_file = File::open(file).expect("Couldn't open file");
     let metadata = uncompressed_file.metadata()?;
 
@@ -50,14 +50,13 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<Vec<u8
         }
     }
 
-    let hash = hasher.finalize().as_slice().to_vec();
-    let hash_string = hex::encode(&hash);
+    let hash: Hash = Hash(hasher.finalize().as_slice().to_vec());
 
     // Write the compressed file to the disk if the write flag is used
     if write {
         let compressed_bytes = compressor.finish()?;
 
-        Object::write_to_disk(&hash_string, &compressed_bytes)?;
+        Object::write_to_disk(&hash.to_string(), &compressed_bytes)?;
     }
 
     Ok(hash)
@@ -136,7 +135,7 @@ mod tests {
 
             // Test
             let expected = run_git_command(Command::new("git").arg("hash-object").arg(test_file_path)).unwrap();
-            let actual = hex::encode(hash_object(false, &PathBuf::from(test_file_path)).unwrap());
+            let actual = hash_object(false, &PathBuf::from(test_file_path)).unwrap().to_string();
 
             assert_eq!(expected, actual);
             assert!(Path::new(".hamachi/objects").read_dir().unwrap().next().is_none());
@@ -158,7 +157,7 @@ mod tests {
 
             // Test
             let expected_hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(test_file_name)).unwrap();
-            let actual_hash = hex::encode(hash_object(true, &PathBuf::from(test_file_name)).unwrap());
+            let actual_hash = hash_object(true, &PathBuf::from(test_file_name)).unwrap().to_string();
 
             let (subdirectory, file_name) = Object::get_path_from_hash(&actual_hash).unwrap();
             let expected_file = File::open(PathBuf::from(".git/objects").join(subdirectory).join(file_name)).expect("Git object file not found");
