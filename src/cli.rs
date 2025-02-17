@@ -29,4 +29,10 @@ pub(crate) enum Command {
         hash: String,
     },
     WriteTree,
+    CommitTree {
+        hash: String,
+        
+        #[clap(short = 'm')]
+        message: Option<String>,
+    }
 }

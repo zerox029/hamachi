@@ -8,7 +8,8 @@ use clap::Parser;
 use cli::{Args, Command};
 use object::blob::{cat_file, hash_object};
 use object::tree::ls_tree;
-use crate::object::tree::write_tree;
+use object::tree::write_tree;
+use object::commit::commit_tree;
 
 fn main() {
     let args = Args::parse();
@@ -36,6 +37,11 @@ fn main() {
             let tree_hash = write_tree(None).unwrap().to_string();
             
             println!("{tree_hash}");
+        },
+        Command::CommitTree { hash, message } => {
+            let commit_hash = commit_tree(hash, message).unwrap().to_string();
+            
+            println!("{commit_hash}");
         }
     }
 }

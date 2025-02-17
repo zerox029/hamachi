@@ -9,6 +9,7 @@ use flate2::read::ZlibDecoder;
 
 pub mod blob;
 pub mod tree;
+pub mod commit;
 
 #[derive(Debug)]
 pub(crate) struct Object {
@@ -26,6 +27,7 @@ struct Header {
 enum ObjectType {
     BLOB,
     TREE,
+    COMMIT,
 }
 
 impl Object {
@@ -121,6 +123,7 @@ impl Display for ObjectType {
         write!(f,"{}", match self {
             ObjectType::BLOB => "blob",
             ObjectType::TREE => "tree",
+            ObjectType::COMMIT => "commit",
         })
     }
 }
@@ -130,5 +133,13 @@ pub struct Hash(Vec<u8>);
 impl ToString for Hash {
     fn to_string(&self) -> String {
         hex::encode(&self.0)
+    }
+}
+
+impl FromStr for Hash {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        hex::decode(s).map_err(|_| ()).map(|v| Hash(v))
     }
 }
