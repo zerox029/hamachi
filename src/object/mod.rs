@@ -2,8 +2,8 @@
 use std::fmt::{Display, Formatter};
 use std::fs;
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
+use std::io::{BufRead, BufReader, Read, Write};
+use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use flate2::read::ZlibDecoder;
 
@@ -89,6 +89,19 @@ impl Object {
         
         Ok((subdirectory, file_name))
     }
+
+    pub fn decompress_object(hash: &str, is_git: bool) -> std::io::Result<Vec<u8>> {
+        let (subdirectory, file_name) = Self::get_path_from_hash(hash).expect("Invalid hash");
+        let path = PathBuf::from(if is_git {".git/objects"} else {".hamachi/objects"}).join(&subdirectory).join(&file_name);
+        let file = File::open(path)?;
+
+        let mut decompressed = Vec::new();
+
+        let mut decompressor = ZlibDecoder::new(file);
+        decompressor.read_to_end(&mut decompressed)?;
+
+        Ok(decompressed)
+    }
 }
 
 impl FromStr for ObjectType {
@@ -109,5 +122,12 @@ impl Display for ObjectType {
             ObjectType::BLOB => "blob",
             ObjectType::TREE => "tree",
         })
+    }
+}
+
+struct Hash(Vec<u8>);
+impl ToString for Hash {
+    fn to_string(&self) -> String {
+        hex::encode(&self.0)
     }
 }

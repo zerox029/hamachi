@@ -23,17 +23,19 @@ fn main() {
             println!("{:?}", file_content)
         },
         Command::HashObject { write, file } => {
-            let hash = hash_object(write, &PathBuf::from(file)).unwrap();
+            let hash = hex::encode(hash_object(write, &PathBuf::from(file)).unwrap());
 
-            println!("{}", hash)
+            println!("{hash}")
         },
         Command::LsTree { name_only, hash } => {
             let tree_content = ls_tree(name_only, &hash).unwrap();
             
-            println!("{}", tree_content)
+            println!("{tree_content}")
         },
         Command::WriteTree => {
-            let _ = write_tree(None);
+            let tree_hash = hex::encode(write_tree(None).unwrap());
+            
+            println!("{tree_hash}");
         }
     }
 }

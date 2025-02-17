@@ -1,7 +1,7 @@
 ﻿use std::{env, fs};
 use std::io::Write;
 use std::path::PathBuf;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command};
 use crate::init;
 
 /// Creates and sets working directory in a temporary directory and initializes a git and hamachi repo in it
@@ -54,8 +54,6 @@ pub fn copy_git_object_file(hash: &str) -> std::io::Result<()> {
         fs::create_dir(&subdirectory)?;
     }
     
-    println!("Copying {:?} to {:?}", from, to);
-
     fs::copy(from, to).expect("Couldn't copy object file");
 
     Ok(())

@@ -57,7 +57,7 @@ fn get_current_tree_entry(tree: &mut Object) -> Result<(Entry, usize), &'static 
         mode,
         filename: file_name.to_string(),
         object_type: if mode == Mode::DIRECTORY { ObjectType::TREE } else { ObjectType::BLOB },
-        hash: hex::encode(entry_buffer),
+        hash: entry_buffer,
     };
 
     println!("{}", entry);
@@ -65,7 +65,7 @@ fn get_current_tree_entry(tree: &mut Object) -> Result<(Entry, usize), &'static 
     Ok((entry, read_bytes))
 }
 
-pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<String> {
+pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Vec<u8>> {
     let path = path_buf.unwrap_or(PathBuf::from("."));
 
     let paths_iter = fs::read_dir(&path)?;
@@ -90,41 +90,45 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<String> {
             entries.push(entry);
         }
         else {
-            if &path == &PathBuf::from("./.git") || &path == Path::new("./target") || &path == Path::new("./hamachi") {
+            if &path == &PathBuf::from("./.git") || &path == Path::new("./.hamachi") {
                 continue;
             }
 
             let hash = write_tree(Some(PathBuf::from(&path)))?;
 
             let entry = Entry{
-                mode: Mode::REGULAR,
+                mode: Mode::DIRECTORY,
                 filename: path.file_name().unwrap().to_string_lossy().to_string(),
-                object_type: ObjectType::BLOB,
+                object_type: ObjectType::TREE,
                 hash,
             };
             entries.push(entry);
         }
     }
 
-    let mut entry_strings = Vec::new();
-    for entry in entries {
-        let entry_string = format!("{} {}\0{}", entry.mode as u32, entry.filename, entry.hash);
-        entry_strings.push(entry_string);
-    }
-    let entries_section = entry_strings.join("");
-    let header = format!("tree {}\0{}", entry_strings.len(), entries_section);
+    let mut entry_byte_vectors = Vec::new();
+    for mut entry in entries {
+        println!("{}", entry);
+        let mut entry_bytes = format!("{} {}\0", entry.mode as u32, entry.filename).as_bytes().to_vec();
+        entry_bytes.append(&mut entry.hash);
 
-    let tree_content = format!("{}\0{}", header, entries_section);
+        entry_byte_vectors.push(entry_bytes);
+    }
+
+    let entries_section = entry_byte_vectors.into_iter().flatten().collect::<Vec<u8>>();
+    let header = format!("tree {}\0", entries_section.len()).as_bytes().to_vec();
 
     let mut hasher = Sha1::new();
     Digest::update(&mut hasher, &header);
-    let hash = hex::encode(hasher.finalize());
+    Digest::update(&mut hasher, &entries_section);
+    let hash = hasher.finalize().as_slice().to_vec();
     
     let mut compressor = ZlibEncoder::new(Vec::new(), Compression::default());
-    compressor.write_all(&tree_content.into_bytes())?;
+    compressor.write_all(&header)?;
+    compressor.write_all(&entries_section)?;
     let compressed_bytes = compressor.finish()?;
     
-    Object::write_to_disk(&hash, &compressed_bytes)?;
+    Object::write_to_disk(&hex::encode(&hash), &compressed_bytes)?;
     
     Ok(hash)
 }
@@ -134,12 +138,12 @@ struct Entry {
     mode: Mode,
     filename: String,
     object_type: ObjectType,
-    hash: String,
+    hash: Vec<u8>,
 }
 
 impl Display for Entry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:0>6} {} {}\t{}", self.mode as u32, self.object_type, self.hash, self.filename)
+        write!(f, "{:0>6} {} {}\t{}", self.mode as u32, self.object_type, hex::encode(&self.hash), self.filename)
     }
 }
 
@@ -169,35 +173,104 @@ impl FromStr for Mode {
 mod tests {
     use std::fs;
     use std::fs::File;
-    use std::io::Write;
-    use std::process::{Command, Stdio};
+    use std::path::PathBuf;
+    use std::process::{Command};
     use rusty_fork::rusty_fork_test;
-    use crate::object::tree::ls_tree;
-    use crate::test_utils::{copy_git_object_file, run_git_command, run_git_command_piped_input, setup_test_environment};
+    use crate::object::Object;
+    use crate::object::tree::{ls_tree, write_tree};
+    use crate::test_utils::*;
 
+    rusty_fork_test! {
         #[test]
-        fn ls_tree_blob_only() {
+        fn ls_tree_test() {
             // Setup
-            setup_test_environment().unwrap();
+            let repo = setup_test_environment().unwrap();
 
             let test_file_path = "test.txt";
-            let test_file = File::create(&test_file_path).unwrap();
+            let _ = File::create(&test_file_path).unwrap();
             fs::write(&test_file_path, "this is some test content").unwrap();
 
-            let file_hash = run_git_command(Command::new("git").arg("hash-object").arg("-w").arg(&test_file_path))
-                .expect("Failed to hash object");
+            let test_dir_path = "testdir";
+            fs::create_dir(&test_dir_path).unwrap();
 
-            let entry = format!("100644 blob {file_hash}\t{test_file_path}");
-            let mktree_command = Command::new("git").arg("mktree").stdin(Stdio::piped()).stdout(Stdio::piped()).spawn().unwrap();
-            let tree_hash = run_git_command_piped_input(mktree_command, entry).unwrap();
-            
-            copy_git_object_file(&file_hash).unwrap();
+            run_git_command(Command::new("git").arg("add").arg(".")).unwrap();
+            let tree_hash = run_git_command(Command::new("git").arg("write-tree")).unwrap();
+
             copy_git_object_file(&tree_hash).unwrap();
 
             // Test
             let expected = run_git_command(Command::new("git").arg("ls-tree").arg(&tree_hash)).unwrap();
             let actual = ls_tree(false, &tree_hash).unwrap();
-            
+
             assert_eq!(expected, actual);
+
+            teardown(repo).unwrap();
+        }
+    }
+
+    rusty_fork_test! {
+        #[test]
+        fn write_tree_non_recursive_test() {
+            // Setup
+            let repo = setup_test_environment().unwrap();
+
+            let test_file_path = "test.txt";
+            File::create(&test_file_path).unwrap();
+            fs::write(&test_file_path, "this is some test content").unwrap();
+
+            let test_file_two_path = "test2.txt";
+            File::create(&test_file_two_path).unwrap();
+            fs::write(&test_file_path, "this is more test content").unwrap();
+
+            run_git_command(Command::new("git").arg("add").arg(".")).unwrap();
+
+            // Test
+            let expected_tree_hash = run_git_command(Command::new("git").arg("write-tree")).unwrap();
+            let actual_tree_hash = hex::encode(write_tree(None).unwrap());
+
+            let actual_tree_content = Object::decompress_object(&actual_tree_hash, false).unwrap();
+            let expected_tree_content = Object::decompress_object(&expected_tree_hash, true).unwrap();
+
+            println!("{}", repo.to_str().unwrap());
+            println!("{}", expected_tree_hash);
+
+            assert_eq!(expected_tree_hash, actual_tree_hash);
+            assert_eq!(expected_tree_content, actual_tree_content);
+            
+            teardown(repo).unwrap();
+        }
+    }
+    
+    rusty_fork_test! {
+        #[test]
+        fn write_tree_recursive_test() {
+            // Setup
+            let repo = setup_test_environment().unwrap();
+            
+            let test_file_path = "test.txt";
+            let _ = File::create(&test_file_path).unwrap();
+            fs::write(&test_file_path, "this is some test content").unwrap();
+            
+            let test_dir_path = "testdir";
+            fs::create_dir(&test_dir_path).unwrap();
+            
+            let test_file_two_path = PathBuf::from(test_dir_path).join("test2.txt");
+            File::create(test_file_two_path).unwrap();
+            
+            run_git_command(Command::new("git").arg("add").arg(".")).unwrap();
+            
+            // Test
+            let expected_tree_hash = run_git_command(Command::new("git").arg("write-tree")).unwrap();
+            let actual_tree_hash = hex::encode(write_tree(None).unwrap());
+
+            let actual_tree_content = Object::decompress_object(&actual_tree_hash, false).unwrap();
+            let expected_tree_content = Object::decompress_object(&expected_tree_hash, true).unwrap();
+
+            println!("{}", repo.to_str().unwrap());
+            println!("{}", expected_tree_hash);
+
+            // assert_eq!(expected_tree_hash, actual_tree_hash);
+            assert_eq!(expected_tree_content, actual_tree_content);
+        }
     }
 }
