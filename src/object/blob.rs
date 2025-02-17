@@ -56,7 +56,7 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<Hash> 
     if write {
         let compressed_bytes = compressor.finish()?;
 
-        Object::write_to_disk(&hash.to_string(), &compressed_bytes)?;
+        Object::write_to_disk(&hash, &compressed_bytes)?;
     }
 
     Ok(hash)

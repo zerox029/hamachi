@@ -125,7 +125,7 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Hash> {
     compressor.write_all(&entries_section)?;
     let compressed_bytes = compressor.finish()?;
     
-    Object::write_to_disk(&hash.to_string(), &compressed_bytes)?;
+    Object::write_to_disk(&hash, &compressed_bytes)?;
     
     Ok(hash)
 }

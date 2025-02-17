@@ -39,7 +39,7 @@ fn main() {
             println!("{tree_hash}");
         },
         Command::CommitTree { hash, message } => {
-            let commit_hash = commit_tree(hash, message).unwrap().to_string();
+            let commit_hash = commit_tree(&hash, &message).unwrap().to_string();
             
             println!("{commit_hash}");
         }

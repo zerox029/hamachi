@@ -57,8 +57,9 @@ impl Object {
         Ok(Object{header, content_buffer_reader: file_buffer_reader})
     }
     
-    fn write_to_disk(hash: &str, content: &Vec<u8>) -> std::io::Result<()> {
-        let (subdirectory, file_name) = Self::get_path_from_hash(hash).expect("Invalid hash");
+    fn write_to_disk(hash: &Hash, content: &Vec<u8>) -> std::io::Result<()> {
+        let string_hash = hash.to_string();
+        let (subdirectory, file_name) = Self::get_path_from_hash(&string_hash).expect("Invalid hash");
         let file_path = &format!(".hamachi/objects/{}/{}", subdirectory, file_name);
         let file_path = Path::new(file_path);
 

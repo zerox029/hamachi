@@ -17,7 +17,9 @@ pub fn setup_test_environment() -> std::io::Result<PathBuf> {
 
     // Create git repo
     Command::new("git").arg("init").output().expect("Failed to initialize git repo");
-    Command::new("git").arg("config").arg("gc.auto").arg("0").output().expect("Failed to disable git garbage collection");
+    Command::new("git").arg("config").arg("gc.auto").arg("0").output().expect("Failed to initialize git repo");
+    Command::new("git").arg("config").arg("user.email").arg("osamu.dazai@gmail.com").output().expect("Failed to set user email");
+    Command::new("git").arg("config").arg("user.name").arg("Osamu Dazai").output().expect("Failed to set user name");
 
     // Create hamachi repo
     init().expect("Failed to initialize hamachi repo");
