@@ -1,4 +1,5 @@
 ﻿use std::{env, fs};
+use std::fs::File;
 use std::io::Write;
 use std::path::PathBuf;
 use std::process::{Child, Command};
@@ -20,6 +21,9 @@ pub fn setup_test_environment() -> std::io::Result<PathBuf> {
     Command::new("git").arg("config").arg("gc.auto").arg("0").output().expect("Failed to initialize git repo");
     Command::new("git").arg("config").arg("user.email").arg("osamu.dazai@gmail.com").output().expect("Failed to set user email");
     Command::new("git").arg("config").arg("user.name").arg("Osamu Dazai").output().expect("Failed to set user name");
+    
+    let mut gitignore = File::create(".gitignore")?;
+    gitignore.write(".hamachi".as_bytes())?;
 
     // Create hamachi repo
     init().expect("Failed to initialize hamachi repo");

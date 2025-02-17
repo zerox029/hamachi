@@ -1,15 +1,18 @@
-mod cli;
 mod object;
 mod test_utils;
+mod command;
 
 use std::fs;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use clap::Parser;
-use cli::{Args, Command};
-use object::blob::{cat_file, hash_object};
-use object::tree::ls_tree;
-use object::tree::write_tree;
-use object::commit::commit_tree;
+use command::{Args, Command};
+use command::config::config;
+use crate::command::cat_file::cat_file;
+use crate::command::commit_tree::commit_tree;
+use crate::command::hash_object::hash_object;
+use crate::command::ls_tree::ls_tree;
+use crate::command::write_tree::write_tree;
 
 fn main() {
     let args = Args::parse();
@@ -42,6 +45,9 @@ fn main() {
             let commit_hash = commit_tree(&hash, &message).unwrap().to_string();
             
             println!("{commit_hash}");
+        },
+        Command::Config { subcommand } => {
+            config(subcommand);
         }
     }
 }
@@ -53,6 +59,8 @@ fn init() -> std::io::Result<()> {
     fs::create_dir(Path::new(".hamachi/objects"))?;
     fs::create_dir_all(Path::new(".hamachi/refs/heads"))?;
     fs::create_dir(Path::new(".hamachi/refs/tags"))?;
+    
+    File::create(".hamachi/config")?;
     
     Ok(())
 }

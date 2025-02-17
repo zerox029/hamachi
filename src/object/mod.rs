@@ -12,26 +12,26 @@ pub mod tree;
 pub mod commit;
 
 #[derive(Debug)]
-pub(crate) struct Object {
-    header: Header,
-    content_buffer_reader: BufReader<ZlibDecoder<File>>,
+pub struct Object {
+    pub header: Header,
+    pub content_buffer_reader: BufReader<ZlibDecoder<File>>,
 }
 
 #[derive(Debug)]
-struct Header {
-    object_type: ObjectType,
-    size: usize,
+pub struct Header {
+    pub(crate) object_type: ObjectType,
+    pub(crate) size: usize,
 }
 
 #[derive(Debug, PartialOrd, PartialEq)]
-enum ObjectType {
+pub(crate) enum ObjectType {
     BLOB,
     TREE,
     COMMIT,
 }
 
 impl Object {
-    fn from_hash(hash: &str) -> Result<Object, &'static str> {
+    pub(crate) fn from_hash(hash: &str) -> Result<Object, &'static str> {
         let (subdirectory, file_name) = Self::get_path_from_hash(hash).expect("Invalid hash");
         let file_path = format!(".hamachi/objects/{}/{}", subdirectory, file_name);
 
@@ -57,7 +57,7 @@ impl Object {
         Ok(Object{header, content_buffer_reader: file_buffer_reader})
     }
     
-    fn write_to_disk(hash: &Hash, content: &Vec<u8>) -> std::io::Result<()> {
+    pub(crate) fn write_to_disk(hash: &Hash, content: &Vec<u8>) -> std::io::Result<()> {
         let string_hash = hash.to_string();
         let (subdirectory, file_name) = Self::get_path_from_hash(&string_hash).expect("Invalid hash");
         let file_path = &format!(".hamachi/objects/{}/{}", subdirectory, file_name);
@@ -130,7 +130,7 @@ impl Display for ObjectType {
 }
 
 #[derive(Debug)]
-pub struct Hash(Vec<u8>);
+pub struct Hash(pub Vec<u8>);
 impl ToString for Hash {
     fn to_string(&self) -> String {
         hex::encode(&self.0)
