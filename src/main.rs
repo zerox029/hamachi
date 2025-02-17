@@ -9,6 +9,7 @@ use clap::Parser;
 use command::{Args, Command};
 use command::config::config;
 use crate::command::cat_file::cat_file;
+use crate::command::clone::clone;
 use crate::command::commit_tree::commit_tree;
 use crate::command::hash_object::hash_object;
 use crate::command::ls_tree::ls_tree;
@@ -48,6 +49,9 @@ fn main() {
         },
         Command::Config { subcommand } => {
             config(subcommand);
+        },
+        Command::Clone { repository } => {
+            clone(repository);
         }
     }
 }

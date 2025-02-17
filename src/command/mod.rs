@@ -7,6 +7,7 @@ pub mod hash_object;
 pub mod ls_tree;
 pub mod write_tree;
 pub mod commit_tree;
+pub mod clone;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -46,5 +47,8 @@ pub(crate) enum Command {
     Config {
         #[clap(subcommand)]
         subcommand: ConfigSubcommand,
-    }
+    },
+    Clone {
+        repository: String,
+    },
 }
