@@ -1,6 +1,7 @@
 mod object;
 mod test_utils;
 mod command;
+mod remote;
 
 use std::fs;
 use std::fs::File;

@@ -48,7 +48,7 @@ pub(crate) fn get_current_tree_entry(tree: &mut Object) -> Result<(crate::object
     let entry = object::tree::Entry {
         mode,
         filename: file_name.to_string(),
-        object_type: if mode == crate::object::tree::Mode::DIRECTORY { ObjectType::TREE } else { ObjectType::BLOB },
+        object_type: if mode == object::tree::Mode::DIRECTORY { ObjectType::TREE } else { ObjectType::BLOB },
         hash: Hash(entry_buffer),
     };
 
