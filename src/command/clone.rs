@@ -10,7 +10,9 @@ pub fn clone(repository: String) {
     if response.status() == reqwest::StatusCode::OK {
         let initial_connection_response = parse_initial_response(response.text().unwrap());
         let pack = generate_pack(&initial_connection_response);
-        
+
+        println!("{pack:?}");
+
         let mut upload_response = reqwest::blocking::Client::new()
             .post(format!("{}/git-upload-pack", repository))
             .header("Content-Type", "application/x-git-upload-pack-request")
@@ -24,7 +26,7 @@ pub fn clone(repository: String) {
         upload_response.read_to_end(&mut data).unwrap();
         
         println!("{:?}", data);
-        
+
         // let mut start = usize::from_str_radix(std::str::from_utf8(&data[..4]).unwrap(), 16).unwrap();
         // 
         // println!("{}", std::str::from_utf8(&data[..1]).unwrap());
@@ -48,7 +50,7 @@ fn parse_initial_response(string: String) -> InitialConnectionResponse {
             let (hash, rest) = s.split_once(" ").unwrap();
             let (name, params) = rest.split_once("\0").unwrap_or((rest, ""));
 
-            let hash = hash.to_owned();
+            let hash = hash[4..].to_owned();
             let name = name.to_owned();
             let params = params.to_owned();
 
@@ -63,10 +65,15 @@ fn parse_initial_response(string: String) -> InitialConnectionResponse {
 }
 
 fn generate_pack(initial_connection_response: &InitialConnectionResponse) -> String {
-    // let want_section = initial_connection_response.want.iter().map(|w| format!("002dwant {}\n", w.hash)).collect::<String>();
+    let want_section = initial_connection_response.want
+        .iter()
+        .map(|w| {
+            let pkt_line = format!("want {}\n", w.hash);
+            format!("{:0>4x}{}", pkt_line.len() + 4, pkt_line)})
+        .collect::<String>();
+
     let have_section = initial_connection_response.common.iter().map(|h| format!("0032have {}\n", h.hash)).collect::<String>();
-    let want_section = format!("002dwant {}\n", initial_connection_response.want.get(1).unwrap().hash);
-    let pack = format!("{want_section}{have_section}0000");
+    let pack = format!("{want_section}{have_section}00000009done\n");
 
     pack
 }
