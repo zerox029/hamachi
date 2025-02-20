@@ -10,6 +10,7 @@ use flate2::read::ZlibDecoder;
 pub mod blob;
 pub mod tree;
 pub mod commit;
+pub mod packfile;
 
 #[derive(Debug)]
 pub struct Object {
