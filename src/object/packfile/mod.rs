@@ -1,8 +1,6 @@
 ﻿use std::fs;
 use std::io::Read;
-use std::ptr::read;
 use flate2::read::ZlibDecoder;
-use reqwest::blocking::Response;
 
 #[derive(Debug)]
 pub struct PackFile {
@@ -21,15 +19,12 @@ impl PackFile {
         // Write the file to disk
         fs::write(format!(".hamachi/objects/pack/pack-{}.pack", hash), &data).unwrap();
 
-        let (header, read_bytes)= Self::parse_header(&data, hash);
-
-        println!("{:#?}", &header);
+        let (header, mut read_bytes)= Self::parse_header(&data, hash);
 
         // Objects
-        let read_bytes = Self::parse_object(&data[read_bytes..]);
-        println!("{}", read_bytes);
-        
-        let read_bytes = Self::parse_object(&data[read_bytes..]);
+        for _ in 0..header.entry_count {
+            read_bytes += Self::parse_object(&data[read_bytes..]);
+        }
 
         PackFile {
             header
@@ -64,11 +59,14 @@ impl PackFile {
     fn parse_object(data: &[u8]) -> usize {
         let mut read_pointer = 0;
 
+        // Parse the header
         let mut is_final_byte = *data.get(read_pointer).unwrap() < 128u8;
         let object_type = ObjectType::from_u8(*data.get(read_pointer).unwrap() >> 4 & 0b111).unwrap();
         read_pointer += 1;
 
         let mut size_bits = Vec::new();
+        size_bits.push(*data.get(read_pointer).unwrap() & 0b1111);
+
         while !is_final_byte {
             let byte = *data.get(read_pointer).unwrap();
 
@@ -77,35 +75,60 @@ impl PackFile {
             read_pointer += 1;
         }
 
-        let mut decompressor = ZlibDecoder::new(&data[read_pointer..]);
+        // Parse the object data
+        let compressed_size = match object_type {
+            ObjectType::Commit => Self::handle_commit(&data[read_pointer..], 0),
+            ObjectType::Blob => Self::handle_blob(&data[read_pointer..], 0),
+            ObjectType::RefDelta => Self::handle_ref_delta(&data[read_pointer..], 0),
+            _ => {
+                println!("Unimplemented type {:?}", object_type);
+                Self::handle_any(&data[read_pointer..], 0)
+            }
+        };
+
+        read_pointer + compressed_size
+    }
+
+    fn handle_commit(data: &[u8], uncompressed_size: usize) -> usize {
+        println!("Reading commit");
+        
+        let mut decompressor = ZlibDecoder::new(data);
         let mut decompressed_data = String::new();
         decompressor.read_to_string(&mut decompressed_data).unwrap();
 
-        println!("Object content: \n{}", decompressed_data);
 
         decompressor.total_in() as usize
     }
 
-    fn parse_object_header(response: &mut Response) -> (ObjectType, Vec<u8>) {
-        let mut data = Vec::new();
-        data.resize(1, 0);
-        response.read_exact(&mut data).unwrap();
+    fn handle_blob(data: &[u8], uncompressed_size: usize) -> usize {
+        println!("Reading blob");
+        
+        let mut decompressor = ZlibDecoder::new(data);
+        let mut decompressed_data = String::new();
+        decompressor.read_to_string(&mut decompressed_data).unwrap();
 
-        let mut is_final_byte = *data.get(0).unwrap() < 128u8;
-        let object_type = ObjectType::from_u8(*data.get(0).unwrap() >> 4 & 0b111).unwrap();
-        let mut size_bits = Vec::new();
-        size_bits.push(*data.get(0).unwrap() & 0b1111);
 
-        while !is_final_byte {
-            data.clear();
-            data.resize(1, 0);
-            response.read_exact(&mut data).unwrap();
+        decompressor.total_in() as usize
+    }
+    
+    fn handle_ref_delta(data: &[u8], uncompressed_size: usize) -> usize {
+        println!("Reading ref-delta");
+        
+        let hash = &data[..20];
 
-            is_final_byte = *data.get(0).unwrap() < 128u8;
-            size_bits.push(*data.get(0).unwrap() & 0b1111111);
-        }
-
-        (object_type, size_bits)
+        let mut decompressor = ZlibDecoder::new(&data[20..]);
+        let mut decompressed_data = Vec::new();
+        decompressor.read_to_end(&mut decompressed_data).unwrap();
+        
+        decompressor.total_in() as usize + 20
+    }
+    
+    fn handle_any(data: &[u8], uncompressed_size: usize) -> usize {
+        let mut decompressor = ZlibDecoder::new(data);
+        let mut decompressed_data = Vec::new();
+        decompressor.read_to_end(&mut decompressed_data).unwrap();
+        
+        decompressor.total_in() as usize
     }
 }
 
