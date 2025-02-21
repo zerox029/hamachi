@@ -20,7 +20,7 @@ pub(crate) struct Commit {
 }
 
 impl Commit {
-    pub(crate) fn from_compressed_data(data: &[u8]) -> (Self, usize) {
+    pub(crate) fn from_packfile_compressed_data(data: &[u8]) -> (Self, usize) {
         let mut decompressor = ZlibDecoder::new(data);
         let mut decompressed_data = String::new();
         decompressor.read_to_string(&mut decompressed_data).unwrap();

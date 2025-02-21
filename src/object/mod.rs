@@ -6,6 +6,7 @@ use std::io::{BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use flate2::read::ZlibDecoder;
+use crate::object::tree::Mode;
 
 pub mod blob;
 pub mod tree;
@@ -108,6 +109,14 @@ impl Object {
     }
 }
 
+impl ObjectType {
+    pub fn from_file_mode(mode: Mode) -> Self {
+        match mode {
+            Mode::DIRECTORY => Self::TREE,
+            _ => Self::BLOB,
+        }
+    }
+}
 impl FromStr for ObjectType {
     type Err = ();
 

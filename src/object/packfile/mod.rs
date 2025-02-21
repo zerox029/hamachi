@@ -4,11 +4,13 @@ use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::str::FromStr;
 use flate2::read::ZlibDecoder;
 use sha1::{Digest, Sha1};
 use crate::object;
 use crate::object::commit::Commit;
 use crate::object::{Hash, Object};
+use crate::object::tree::Tree;
 
 #[derive(Debug)]
 pub struct PackFile {
@@ -90,9 +92,10 @@ impl PackFile {
         }
 
         // Parse the object data
-        let compressed_size = match object_type {
+        let (compressed_size, hash) = match object_type {
             ObjectType::Commit => Self::handle_commit(&data[read_pointer..], 0),
             ObjectType::Blob => Self::handle_blob(&data[read_pointer..], 0),
+            ObjectType::Tree => Self::handle_tree(&data[read_pointer..], 0),
             ObjectType::RefDelta => Self::handle_ref_delta(&data[read_pointer..], 0),
             _ => {
                 println!("Unimplemented type {:?}", object_type);
@@ -103,25 +106,35 @@ impl PackFile {
         read_pointer + compressed_size
     }
 
-    fn handle_commit(data: &[u8], uncompressed_size: usize) -> usize {
-        let (commit, read_bytes) = Commit::from_compressed_data(data);
+    fn handle_commit(data: &[u8], uncompressed_size: usize) -> (usize, Hash) {
+        let (commit, read_bytes) = Commit::from_packfile_compressed_data(data);
         let commit_object_file_content = commit.to_object_file_representation();
         
-        Self::hash_and_write_object(commit_object_file_content);
+        let object_hash = Self::hash_and_write_object(commit_object_file_content);
 
-        read_bytes
+        (read_bytes, object_hash)
     }
 
-    fn handle_blob(data: &[u8], _uncompressed_size: usize) -> usize {
+    fn handle_blob(data: &[u8], _uncompressed_size: usize) -> (usize, Hash) {
         let (blob, read_bytes) = object::blob::Blob::from_packfile_compressed_data(data);
         let blob_object_file_content = blob.to_object_file_representation();
         
-        Self::hash_and_write_object(blob_object_file_content);
-        
-        read_bytes
+        let object_hash = Self::hash_and_write_object(blob_object_file_content);
+
+        (read_bytes, object_hash)
     }
     
-    fn handle_ref_delta(data: &[u8], _uncompressed_size: usize) -> usize {
+    fn handle_tree(data: &[u8], uncompressed_size: usize) -> (usize, Hash) {
+        let (mut tree, read_bytes) = Tree::from_packfile_compressed_data(data);
+        let tree_object_file_content = tree.generate_object_file_representation();
+        
+        let object_hash = Self::hash_and_write_object(tree_object_file_content);
+        println!("- Tree {:?}", object_hash.to_string());
+        
+        (read_bytes, object_hash)
+    }
+    
+    fn handle_ref_delta(data: &[u8], _uncompressed_size: usize) -> (usize, Hash) {
         println!("000\tOBJ_REF_DELTA\t30");
         
         let _hash = &data[..20];
@@ -129,30 +142,34 @@ impl PackFile {
         let mut decompressor = ZlibDecoder::new(&data[20..]);
         let mut decompressed_data = Vec::new();
         decompressor.read_to_end(&mut decompressed_data).unwrap();
-        
-        decompressor.total_in() as usize + 20
+
+        (decompressor.total_in() as usize + 20, Hash::from_str("95e0993a2b6f9d4c4b64286de1d4fec569e9cfc2").unwrap())
     }
     
-    fn handle_any(data: &[u8], _uncompressed_size: usize) -> usize {
+    fn handle_any(data: &[u8], _uncompressed_size: usize) -> (usize, Hash) {
         let mut decompressor = ZlibDecoder::new(data);
         let mut decompressed_data = Vec::new();
         decompressor.read_to_end(&mut decompressed_data).unwrap();
-        
-        decompressor.total_in() as usize
+
+        (decompressor.total_in() as usize, Hash::from_str("95e0993a2b6f9d4c4b64286de1d4fec569e9cfc2").unwrap())
     }
     
-    fn hash_and_write_object(data: Vec<u8>) {
+    fn hash_and_write_object(data: Vec<u8>) -> Hash {
+        // TODO: Move this to object struct
         let mut hasher = Sha1::new();
         Digest::update(&mut hasher, &data);
-        let hash = Hash(hasher.finalize().to_vec()).to_string();
+        let hash = Hash(hasher.finalize().to_vec());
+        let hash_string = hash.to_string();
 
-        let (subdirectory, file_name) = Object::get_path_from_hash(&hash).unwrap();
+        let (subdirectory, file_name) = Object::get_path_from_hash(&hash_string).unwrap();
         let path = PathBuf::from(".hamachi/objects").join(subdirectory).join(file_name);
         if !fs::exists(&path).unwrap() {
             fs::create_dir_all(PathBuf::from(".hamachi/objects").join(subdirectory)).unwrap();
             let mut file = File::create(&path).unwrap();
             file.write(data.as_slice()).unwrap();
-        } 
+        }
+        
+        hash
     }
 }
 
