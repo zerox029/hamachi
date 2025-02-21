@@ -1,8 +1,10 @@
 ﻿use std::str::FromStr;
 use std::fmt::Display;
+use std::fs::File;
 use std::io::Read;
-use flate2::read::ZlibDecoder;
-use crate::object::{Hash};
+use std::path::PathBuf;
+use flate2::read::{ZlibDecoder, ZlibEncoder};
+use crate::object::{Hash, Object};
 
 #[derive(Debug)]
 pub(crate) struct Commit {
@@ -20,12 +22,26 @@ pub(crate) struct Commit {
 }
 
 impl Commit {
+    pub(crate) fn from_hash(hash: &Hash) -> Self {
+        let hash_string = hash.to_string();
+
+        let mut object = Object::from_hash(&hash_string).unwrap();
+        let mut content = String::new();
+        object.content_buffer_reader.read_to_string(&mut content).unwrap();
+
+        Self::parse_commit_content(content)
+    }
+
     pub(crate) fn from_packfile_compressed_data(data: &[u8]) -> (Self, usize) {
         let mut decompressor = ZlibDecoder::new(data);
         let mut decompressed_data = String::new();
         decompressor.read_to_string(&mut decompressed_data).unwrap();
 
-        let mut lines = decompressed_data.lines();
+        (Self::parse_commit_content(decompressed_data), decompressor.total_in() as usize)
+    }
+
+    fn parse_commit_content(data: String) -> Self {
+        let mut lines = data.lines();
 
         // Tree hash
         let (line_type, tree_hash) = lines.next().unwrap().split_once(' ').unwrap();
@@ -72,7 +88,7 @@ impl Commit {
 
         let commit_message = lines.skip(1).next().unwrap().to_string();
 
-        (Self {
+        Self {
             tree_hash,
             parents,
             author_name,
@@ -83,8 +99,8 @@ impl Commit {
             committer_email,
             committer_date,
             committer_date_timezone,
-            commit_message,
-        }, decompressor.total_in() as usize)
+            commit_message
+        }
     }
 
     pub(crate) fn to_object_file_representation(&self) -> Vec<u8> {

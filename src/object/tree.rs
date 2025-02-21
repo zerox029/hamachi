@@ -3,11 +3,11 @@ use std::fmt::{Display};
 use std::io::Read;
 use std::str::FromStr;
 use flate2::read::ZlibDecoder;
-use sha1::{Digest, Sha1};
+use crate::command::ls_tree::ls_tree;
 use crate::object::{Hash, ObjectType};
 
 pub(crate) struct Tree {
-    entries: Vec<Entry>,
+    pub(crate) entries: Vec<Entry>,
 }
 
 impl Tree {
@@ -58,6 +58,12 @@ impl Tree {
         let header = format!("tree {}\0", entries_section.len()).as_bytes().to_vec();
         
         vec![header, entries_section].concat()
+    }
+
+    pub(crate) fn read_from_file(hash: Hash) -> Self {
+        let tree = ls_tree(false, &hash.to_string()).1;
+        
+        tree
     }
 }
 

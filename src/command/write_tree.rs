@@ -51,7 +51,6 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Hash> {
 
     let mut entry_byte_vectors = Vec::new();
     for mut entry in entries {
-        println!("{}", entry);
         let mut entry_bytes = format!("{} {}\0", entry.mode as u32, entry.filename).as_bytes().to_vec();
         entry_bytes.append(&mut entry.hash.0);
 

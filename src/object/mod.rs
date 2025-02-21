@@ -25,7 +25,7 @@ pub struct Header {
     pub(crate) size: usize,
 }
 
-#[derive(Debug, PartialOrd, PartialEq)]
+#[derive(Debug, PartialOrd, Eq, PartialEq)]
 pub(crate) enum ObjectType {
     BLOB,
     TREE,
@@ -139,11 +139,11 @@ impl Display for ObjectType {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct Hash(pub Vec<u8>);
-impl ToString for Hash {
-    fn to_string(&self) -> String {
-        hex::encode(&self.0)
+impl Display for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", hex::encode(&self.0))
     }
 }
 

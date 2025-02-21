@@ -3,28 +3,31 @@ use std::io::{BufRead, Read};
 use std::str::FromStr;
 use crate::object;
 use crate::object::{Hash, Object, ObjectType};
+use crate::object::tree::Tree;
 
 /// List the contents of a tree object with the specified hash
 /// https://git-scm.com/docs/git-ls-tree
-pub(crate) fn ls_tree(_name_only: bool, hash: &str) -> std::io::Result<String> {
+pub(crate) fn ls_tree(_name_only: bool, hash: &str) -> (std::io::Result<String>, Tree) {
     let mut tree = Object::from_hash(hash).expect("error here lol");
     assert_eq!(tree.header.object_type, ObjectType::TREE, "Object was not a tree");
 
     // Read the rest of the file
     let mut read_bytes = 0;
     let mut result = String::new();
+    let mut entries = Vec::new();
     while read_bytes < tree.header.size {
         let (entry, size) = get_current_tree_entry(&mut tree).expect("error reading entry");
         read_bytes += size;
 
         result.push_str(&format!("\n{}", entry.to_string().as_str()));
+        entries.push(entry);
     }
 
-    Ok(result.trim_start().to_string())
+    (Ok(result.trim_start().to_string()), Tree { entries })
 }
 
 /// Returns the tree entry at the current position in the tree buffer reader and its size in bytes
-pub(crate) fn get_current_tree_entry(tree: &mut Object) -> Result<(crate::object::tree::Entry, usize), &'static str> {
+pub(crate) fn get_current_tree_entry(tree: &mut Object) -> Result<(object::tree::Entry, usize), &'static str> {
     let mut read_bytes = 0;
 
     let mut entry_buffer = Vec::new();
@@ -84,7 +87,7 @@ mod tests {
 
             // Test
             let expected = run_git_command(Command::new("git").arg("ls-tree").arg(&tree_hash)).unwrap();
-            let actual = ls_tree(false, &tree_hash).unwrap();
+            let actual = ls_tree(false, &tree_hash).0.unwrap();
 
             assert_eq!(expected, actual);
 

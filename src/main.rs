@@ -44,7 +44,7 @@ fn main() {
             println!("{hash}")
         },
         Command::LsTree { name_only, hash } => {
-            let tree_content = ls_tree(name_only, &hash).unwrap();
+            let tree_content = ls_tree(name_only, &hash).0.unwrap();
             
             println!("{tree_content}")
         },

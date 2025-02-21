@@ -28,7 +28,7 @@ impl HttpClient {
         Err("Failed to discover refs")
     }
 
-    pub fn fetch_pack(&self, discover_refs_response: &DiscoverRefsResponse) {
+    pub fn fetch_pack(&self, discover_refs_response: &DiscoverRefsResponse) -> PackFile {
         let pack = generate_pack(discover_refs_response);
 
         let mut upload_response = reqwest::blocking::Client::new()
@@ -43,7 +43,7 @@ impl HttpClient {
         let mut data: Vec<u8> = Vec::new();
         upload_response.read_to_end(&mut data).unwrap();
         
-        let _packfile = PackFile::new(data, discover_refs_response.want.get(0).unwrap().hash.to_owned());
+        PackFile::new(data, discover_refs_response.want.get(0).unwrap().hash.to_owned())
     }
 }
 
