@@ -27,27 +27,14 @@ pub fn commit_tree(hash: &str, message: &Option<String>) -> std::io::Result<Hash
         commit_message: message.clone().unwrap_or_default().to_string(),
     };
 
-    let content = format!("tree {}{}\nauthor {} <{}> {} {}\ncommitter {} <{}> {} {}\n\n{}\n",
-                          commit.tree_hash.to_string(),
-                          commit.parents.into_iter().map(|p| p.parent_hash.to_string()).collect::<Vec<String>>().join(""),
-                          commit.author_name,
-                          commit.author_email,
-                          commit.author_date,
-                          commit.author_date_timezone,
-                          commit.committer_name,
-                          commit.committer_email,
-                          commit.committer_date,
-                          commit.committer_date_timezone,
-                          commit.commit_message);
-    let header = format!("commit {}", content.len());
-    let commit_string = format!("{}\0{}", header, content);
+    let commit_file_content = commit.to_object_file_representation();
 
     let mut hasher = Sha1::new();
-    Digest::update(&mut hasher, commit_string.as_bytes());
+    Digest::update(&mut hasher, &commit_file_content);
     let hash = Hash(hasher.finalize().as_slice().to_vec());
 
     let mut compressor = ZlibEncoder::new(Vec::new(), Compression::default());
-    compressor.write_all(&commit_string.as_bytes())?;
+    compressor.write_all(&commit_file_content)?;
     let compressed_bytes = compressor.finish()?;
 
     Object::write_to_disk(&hash, &compressed_bytes)?;

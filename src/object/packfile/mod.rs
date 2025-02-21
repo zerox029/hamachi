@@ -6,6 +6,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use flate2::read::ZlibDecoder;
 use sha1::{Digest, Sha1};
+use crate::object;
 use crate::object::commit::Commit;
 use crate::object::{Hash, Object};
 
@@ -104,33 +105,20 @@ impl PackFile {
 
     fn handle_commit(data: &[u8], uncompressed_size: usize) -> usize {
         let (commit, read_bytes) = Commit::from_compressed_data(data);
-
         let commit_object_file_content = commit.to_object_file_representation();
-
-        let mut hasher = Sha1::new();
-        Digest::update(&mut hasher, &commit_object_file_content);
-        let hash = Hash(hasher.finalize().to_vec()).to_string();
-
-        let (subdirectory, file_name) = Object::get_path_from_hash(&hash).unwrap();
-        let path = PathBuf::from(".hamachi/objects").join(subdirectory).join(file_name);
-        if !fs::exists(&path).unwrap() {
-            fs::create_dir_all(PathBuf::from(".hamachi/objects").join(subdirectory)).unwrap();
-            let mut file = File::create(&path).unwrap();
-            file.write(commit_object_file_content.as_slice()).unwrap();
-        }
+        
+        Self::hash_and_write_object(commit_object_file_content);
 
         read_bytes
     }
 
     fn handle_blob(data: &[u8], _uncompressed_size: usize) -> usize {
-        println!("Reading blob");
+        let (blob, read_bytes) = object::blob::Blob::from_packfile_compressed_data(data);
+        let blob_object_file_content = blob.to_object_file_representation();
         
-        let mut decompressor = ZlibDecoder::new(data);
-        let mut decompressed_data = String::new();
-        decompressor.read_to_string(&mut decompressed_data).unwrap();
-
-
-        decompressor.total_in() as usize
+        Self::hash_and_write_object(blob_object_file_content);
+        
+        read_bytes
     }
     
     fn handle_ref_delta(data: &[u8], _uncompressed_size: usize) -> usize {
@@ -151,6 +139,20 @@ impl PackFile {
         decompressor.read_to_end(&mut decompressed_data).unwrap();
         
         decompressor.total_in() as usize
+    }
+    
+    fn hash_and_write_object(data: Vec<u8>) {
+        let mut hasher = Sha1::new();
+        Digest::update(&mut hasher, &data);
+        let hash = Hash(hasher.finalize().to_vec()).to_string();
+
+        let (subdirectory, file_name) = Object::get_path_from_hash(&hash).unwrap();
+        let path = PathBuf::from(".hamachi/objects").join(subdirectory).join(file_name);
+        if !fs::exists(&path).unwrap() {
+            fs::create_dir_all(PathBuf::from(".hamachi/objects").join(subdirectory)).unwrap();
+            let mut file = File::create(&path).unwrap();
+            file.write(data.as_slice()).unwrap();
+        } 
     }
 }
 
