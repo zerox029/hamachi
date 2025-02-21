@@ -1,6 +1,13 @@
-﻿use std::fs;
-use std::io::Read;
+﻿mod idx;
+
+use std::fs;
+use std::fs::File;
+use std::io::{Read, Write};
+use std::path::PathBuf;
 use flate2::read::ZlibDecoder;
+use sha1::{Digest, Sha1};
+use crate::object::commit::Commit;
+use crate::object::{Hash, Object};
 
 #[derive(Debug)]
 pub struct PackFile {
@@ -34,20 +41,26 @@ impl PackFile {
     fn parse_header(data: &Vec<u8>, hash: String) -> (PackFileHeader, usize) {
         let mut read_pointer: usize = 0;
 
-        let unknown_header_thing = &data[read_pointer..read_pointer + 8];
+        println!("Packfile Headers");
+
+        let _ = &data[read_pointer..read_pointer + 8];
         read_pointer += 8;
 
         // 4 byte signature PACK
-        let signature = &data[read_pointer..read_pointer + 4];
+        let signature = String::from_utf8(data[read_pointer..read_pointer + 4].to_vec()).unwrap();
         read_pointer += 4;
+        println!("- Signature {}", signature);
+        assert_eq!(signature, "PACK");
 
         // Version number
         let version = u32::from_be_bytes(data[read_pointer..read_pointer + 4].to_vec().try_into().unwrap());
         read_pointer += 4;
+        println!("- Version {}", version);
 
         // Number of objects
         let entry_count = u32::from_be_bytes(data[read_pointer..read_pointer + 4].to_vec().try_into().unwrap());
         read_pointer += 4;
+        println!("- Entry Count {}", entry_count);
 
         (PackFileHeader {
             hash,
@@ -90,17 +103,26 @@ impl PackFile {
     }
 
     fn handle_commit(data: &[u8], uncompressed_size: usize) -> usize {
-        println!("Reading commit");
-        
-        let mut decompressor = ZlibDecoder::new(data);
-        let mut decompressed_data = String::new();
-        decompressor.read_to_string(&mut decompressed_data).unwrap();
+        let (commit, read_bytes) = Commit::from_compressed_data(data);
 
+        let commit_object_file_content = commit.to_object_file_representation();
 
-        decompressor.total_in() as usize
+        let mut hasher = Sha1::new();
+        Digest::update(&mut hasher, &commit_object_file_content);
+        let hash = Hash(hasher.finalize().to_vec()).to_string();
+
+        let (subdirectory, file_name) = Object::get_path_from_hash(&hash).unwrap();
+        let path = PathBuf::from(".hamachi/objects").join(subdirectory).join(file_name);
+        if !fs::exists(&path).unwrap() {
+            fs::create_dir_all(PathBuf::from(".hamachi/objects").join(subdirectory)).unwrap();
+            let mut file = File::create(&path).unwrap();
+            file.write(commit_object_file_content.as_slice()).unwrap();
+        }
+
+        read_bytes
     }
 
-    fn handle_blob(data: &[u8], uncompressed_size: usize) -> usize {
+    fn handle_blob(data: &[u8], _uncompressed_size: usize) -> usize {
         println!("Reading blob");
         
         let mut decompressor = ZlibDecoder::new(data);
@@ -111,10 +133,10 @@ impl PackFile {
         decompressor.total_in() as usize
     }
     
-    fn handle_ref_delta(data: &[u8], uncompressed_size: usize) -> usize {
-        println!("Reading ref-delta");
+    fn handle_ref_delta(data: &[u8], _uncompressed_size: usize) -> usize {
+        println!("000\tOBJ_REF_DELTA\t30");
         
-        let hash = &data[..20];
+        let _hash = &data[..20];
 
         let mut decompressor = ZlibDecoder::new(&data[20..]);
         let mut decompressed_data = Vec::new();
@@ -123,7 +145,7 @@ impl PackFile {
         decompressor.total_in() as usize + 20
     }
     
-    fn handle_any(data: &[u8], uncompressed_size: usize) -> usize {
+    fn handle_any(data: &[u8], _uncompressed_size: usize) -> usize {
         let mut decompressor = ZlibDecoder::new(data);
         let mut decompressed_data = Vec::new();
         decompressor.read_to_end(&mut decompressed_data).unwrap();

@@ -1,6 +1,5 @@
-﻿use std::io::{Read};
-use reqwest::Url;
-use crate::remote::http_client::{DiscoverRefsResponse, HttpClient};
+﻿use reqwest::Url;
+use crate::remote::http_client::{HttpClient};
 
 /// Clone a repository into a new directory
 /// https://git-scm.com/docs/git-clone

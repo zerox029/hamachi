@@ -18,6 +18,6 @@ pub fn config(subcommand: ConfigSubcommand) {
     }
 }
 
-fn config_set(name: String, value: String) {
+fn config_set(_name: String, _value: String) {
     todo!()
 }

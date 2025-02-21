@@ -43,7 +43,7 @@ impl HttpClient {
         let mut data: Vec<u8> = Vec::new();
         upload_response.read_to_end(&mut data).unwrap();
         
-        let packfile = PackFile::new(data, discover_refs_response.want.get(0).unwrap().hash.to_owned());
+        let _packfile = PackFile::new(data, discover_refs_response.want.get(0).unwrap().hash.to_owned());
     }
 }
 

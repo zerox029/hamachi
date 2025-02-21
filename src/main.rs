@@ -7,6 +7,7 @@ use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use clap::Parser;
+use rand::RngCore;
 use command::{Args, Command};
 use command::config::config;
 use crate::command::cat_file::cat_file;
@@ -18,6 +19,15 @@ use crate::command::write_tree::write_tree;
 
 fn main() {
     let args = Args::parse();
+
+    if std::env::var("test") == Ok("true".to_string()) {
+        let dir = Path::new("./testing").join(rand::rng().next_u64().to_string());
+        fs::create_dir_all(&dir).unwrap();
+        
+        std::env::set_current_dir(&dir).unwrap();
+        
+        init().expect("Failed to init");
+    }
 
     match args.command {
         Command::Init => {
@@ -62,6 +72,7 @@ fn main() {
 fn init() -> std::io::Result<()> {
     fs::create_dir(Path::new(".hamachi"))?;
     fs::create_dir(Path::new(".hamachi/objects"))?;
+    fs::create_dir(Path::new(".hamachi/objects/pack"))?;
     fs::create_dir_all(Path::new(".hamachi/refs/heads"))?;
     fs::create_dir(Path::new(".hamachi/refs/tags"))?;
     

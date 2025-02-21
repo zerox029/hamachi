@@ -49,7 +49,7 @@ pub fn run_git_command_piped_input(mut command: Child, input: String) -> std::io
     Ok(captured_stdout.trim().to_string())
 }
 
-pub fn copy_git_object_file(hash: &str) -> std::io::Result<()> {
+pub(crate) fn copy_git_object_file(hash: &str) -> std::io::Result<()> {
     let (subdirectory, file_name) = crate::object::Object::get_path_from_hash(hash).expect("Invalid hash");
 
     let from = PathBuf::from(".git/objects").join(subdirectory).join(file_name);

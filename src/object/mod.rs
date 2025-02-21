@@ -130,7 +130,7 @@ impl Display for ObjectType {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Hash(pub Vec<u8>);
 impl ToString for Hash {
     fn to_string(&self) -> String {
