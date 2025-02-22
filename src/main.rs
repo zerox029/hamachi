@@ -16,6 +16,7 @@ use rand::RngCore;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
+use crate::object::Object;
 
 fn main() {
     let args = Args::parse();
