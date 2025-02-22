@@ -1,10 +1,10 @@
-﻿use std::str::FromStr;
+use crate::object::{Hash, Object};
+use flate2::read::{ZlibDecoder, ZlibEncoder};
 use std::fmt::Display;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-use flate2::read::{ZlibDecoder, ZlibEncoder};
-use crate::object::{Hash, Object};
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub(crate) struct Commit {
@@ -27,7 +27,10 @@ impl Commit {
 
         let mut object = Object::from_hash(&hash_string).unwrap();
         let mut content = String::new();
-        object.content_buffer_reader.read_to_string(&mut content).unwrap();
+        object
+            .content_buffer_reader
+            .read_to_string(&mut content)
+            .unwrap();
 
         Self::parse_commit_content(content)
     }
@@ -37,7 +40,10 @@ impl Commit {
         let mut decompressed_data = String::new();
         decompressor.read_to_string(&mut decompressed_data).unwrap();
 
-        (Self::parse_commit_content(decompressed_data), decompressor.total_in() as usize)
+        (
+            Self::parse_commit_content(decompressed_data),
+            decompressor.total_in() as usize,
+        )
     }
 
     fn parse_commit_content(data: String) -> Self {
@@ -58,10 +64,18 @@ impl Commit {
         } else {
             None
         };
-        let parents = if parent_hash.is_some() { vec![Parent::new(parent_hash.unwrap())] } else { Vec::new() };
+        let parents = if parent_hash.is_some() {
+            vec![Parent::new(parent_hash.unwrap())]
+        } else {
+            Vec::new()
+        };
 
         // Author
-        let mut author_line = if parents.len() > 0 { lines.next().unwrap() } else { parent_line };
+        let mut author_line = if parents.len() > 0 {
+            lines.next().unwrap()
+        } else {
+            parent_line
+        };
         assert!(author_line.starts_with("author"));
         let email_start = author_line.find("<").unwrap();
         let email_end = author_line.find(">").unwrap();
@@ -78,8 +92,12 @@ impl Commit {
         assert!(committer_line.starts_with("committer"));
         let email_start = committer_line.find("<").unwrap();
         let email_end = committer_line.find(">").unwrap();
-        let committer_name = committer_line["committer ".len()..email_start].trim().to_string();
-        let committer_email = committer_line[email_start + 1..email_end].trim().to_string();
+        let committer_name = committer_line["committer ".len()..email_start]
+            .trim()
+            .to_string();
+        let committer_email = committer_line[email_start + 1..email_end]
+            .trim()
+            .to_string();
 
         let mut remaining = committer_line[email_end + 1..].trim().split_whitespace();
         let committer_date = remaining.next().unwrap();
@@ -99,26 +117,32 @@ impl Commit {
             committer_email,
             committer_date,
             committer_date_timezone,
-            commit_message
+            commit_message,
         }
     }
 
     pub(crate) fn to_object_file_representation(&self) -> Vec<u8> {
-        let content = format!("tree {}{}\nauthor {} <{}> {} {}\ncommitter {} <{}> {} {}\n\n{}\n",
-                              self.tree_hash.to_string(),
-                              self.parents.iter().map(|p| format!("\nparent {}", p.parent_hash.to_string())).collect::<Vec<String>>().join(""),
-                              self.author_name,
-                              self.author_email,
-                              self.author_date,
-                              self.author_date_timezone,
-                              self.committer_name,
-                              self.committer_email,
-                              self.committer_date,
-                              self.committer_date_timezone,
-                              self.commit_message);
+        let content = format!(
+            "tree {}{}\nauthor {} <{}> {} {}\ncommitter {} <{}> {} {}\n\n{}\n",
+            self.tree_hash.to_string(),
+            self.parents
+                .iter()
+                .map(|p| format!("\nparent {}", p.parent_hash.to_string()))
+                .collect::<Vec<String>>()
+                .join(""),
+            self.author_name,
+            self.author_email,
+            self.author_date,
+            self.author_date_timezone,
+            self.committer_name,
+            self.committer_email,
+            self.committer_date,
+            self.committer_date_timezone,
+            self.commit_message
+        );
         let header = format!("commit {}", content.len());
         let commit_string = format!("{}\0{}", header, content);
-        
+
         commit_string.as_bytes().to_vec()
     }
 }
@@ -130,9 +154,7 @@ pub(crate) struct Parent {
 
 impl Parent {
     pub(crate) fn new(hash: Hash) -> Self {
-        Self {
-            parent_hash: hash
-        }
+        Self { parent_hash: hash }
     }
 }
 

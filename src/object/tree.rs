@@ -1,10 +1,10 @@
-﻿use std::cmp::PartialEq;
-use std::fmt::{Display};
-use std::io::Read;
-use std::str::FromStr;
-use flate2::read::ZlibDecoder;
 use crate::command::ls_tree::ls_tree;
 use crate::object::{Hash, ObjectType};
+use flate2::read::ZlibDecoder;
+use std::cmp::PartialEq;
+use std::fmt::Display;
+use std::io::Read;
+use std::str::FromStr;
 
 pub(crate) struct Tree {
     pub(crate) entries: Vec<Entry>,
@@ -15,12 +15,15 @@ impl Tree {
         let mut decompressor = ZlibDecoder::new(data);
         let mut decompressed_data = Vec::new();
         decompressor.read_to_end(&mut decompressed_data).unwrap();
-        
+
         let mut entries = Vec::new();
         let mut read_pointer = 0;
 
         while read_pointer < decompressed_data.len() {
-            let null_separator = decompressed_data[read_pointer..].iter().position(|&c| c == b'\0').unwrap();
+            let null_separator = decompressed_data[read_pointer..]
+                .iter()
+                .position(|&c| c == b'\0')
+                .unwrap();
 
             let mode_name = &decompressed_data[read_pointer..read_pointer + null_separator];
             let mode_name_str = String::from_utf8(mode_name.to_vec()).unwrap();
@@ -28,7 +31,7 @@ impl Tree {
 
             let mode = Mode::from_str(parts.next().unwrap()).unwrap();
             let filename = parts.next().unwrap().to_string();
-            
+
             let object_type = ObjectType::from_file_mode(mode);
 
             read_pointer += null_separator + 1;
@@ -38,31 +41,41 @@ impl Tree {
             read_pointer += 20;
 
             entries.push(Entry {
-                mode, filename, object_type, hash
+                mode,
+                filename,
+                object_type,
+                hash,
             })
         }
 
         (Tree { entries }, decompressor.total_in() as usize)
     }
-    
+
     pub(crate) fn generate_object_file_representation(&mut self) -> Vec<u8> {
         let mut entry_byte_vectors = Vec::new();
         for entry in &mut self.entries {
-            let mut entry_bytes = format!("{} {}\0", entry.mode as u32, entry.filename).as_bytes().to_vec();
-            entry_bytes.append(&mut entry.hash.0);
+            let mut entry_bytes = format!("{} {}\0", entry.mode as u32, entry.filename)
+                .as_bytes()
+                .to_vec();
+            entry_bytes.append(&mut entry.hash.0.clone());
 
             entry_byte_vectors.push(entry_bytes);
         }
 
-        let entries_section = entry_byte_vectors.into_iter().flatten().collect::<Vec<u8>>();
-        let header = format!("tree {}\0", entries_section.len()).as_bytes().to_vec();
-        
+        let entries_section = entry_byte_vectors
+            .into_iter()
+            .flatten()
+            .collect::<Vec<u8>>();
+        let header = format!("tree {}\0", entries_section.len())
+            .as_bytes()
+            .to_vec();
+
         vec![header, entries_section].concat()
     }
 
     pub(crate) fn read_from_file(hash: Hash) -> Self {
         let tree = ls_tree(false, &hash.to_string()).1;
-        
+
         tree
     }
 }
@@ -77,7 +90,14 @@ pub(crate) struct Entry {
 
 impl Display for Entry {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:0>6} {} {}\t{}", self.mode as u32, self.object_type, &self.hash.to_string(), self.filename)
+        write!(
+            f,
+            "{:0>6} {} {}\t{}",
+            self.mode as u32,
+            self.object_type,
+            &self.hash.to_string(),
+            self.filename
+        )
     }
 }
 
@@ -101,8 +121,6 @@ impl FromStr for Mode {
             _ => Err(()),
         }
     }
-
-
 }
 impl Mode {
     fn from_bytes(bytes: &[u8]) -> Result<Self, ()> {
@@ -111,4 +129,3 @@ impl Mode {
         Self::from_str(string.as_str())
     }
 }
-

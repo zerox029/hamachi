@@ -1,6 +1,6 @@
-﻿use std::io::Read;
-use reqwest::Url;
 use crate::object::packfile::PackFile;
+use reqwest::Url;
+use std::io::Read;
 
 pub struct HttpClient {
     url: Url,
@@ -42,15 +42,20 @@ impl HttpClient {
 
         let mut data: Vec<u8> = Vec::new();
         upload_response.read_to_end(&mut data).unwrap();
-        
-        PackFile::new(data, discover_refs_response.want.get(0).unwrap().hash.to_owned())
+
+        PackFile::new(
+            data,
+            discover_refs_response.want.get(0).unwrap().hash.to_owned(),
+        )
     }
 }
 
 fn parse_discover_refs_response(string: String) -> DiscoverRefsResponse {
     let advertised = string
-        .strip_prefix("001e# service=git-upload-pack\n0000").unwrap()
-        .strip_suffix("\n0000").unwrap()
+        .strip_prefix("001e# service=git-upload-pack\n0000")
+        .unwrap()
+        .strip_suffix("\n0000")
+        .unwrap()
         .split('\n')
         .map(|s| {
             let (hash, rest) = s.split_once(" ").unwrap();
@@ -76,10 +81,15 @@ fn generate_pack(initial_connection_response: &DiscoverRefsResponse) -> String {
         .iter()
         .map(|w| {
             let pkt_line = format!("want {}\n", w.hash);
-            format!("{:0>4x}{}", pkt_line.len() + 4, pkt_line)})
+            format!("{:0>4x}{}", pkt_line.len() + 4, pkt_line)
+        })
         .collect::<String>();
 
-    let have_section = initial_connection_response.common.iter().map(|h| format!("0032have {}\n", h.hash)).collect::<String>();
+    let have_section = initial_connection_response
+        .common
+        .iter()
+        .map(|h| format!("0032have {}\n", h.hash))
+        .collect::<String>();
     let pack = format!("{want_section}{have_section}00000009done\n");
 
     pack

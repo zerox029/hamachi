@@ -1,4 +1,4 @@
-﻿use clap::Subcommand;
+use clap::Subcommand;
 
 #[derive(Debug, Subcommand)]
 pub(crate) enum ConfigSubcommand {
@@ -12,9 +12,9 @@ pub(crate) enum ConfigSubcommand {
 }
 
 pub fn config(subcommand: ConfigSubcommand) {
-    match subcommand { 
+    match subcommand {
         ConfigSubcommand::Set { name, value } => config_set(name, value),
-        _ => todo!()
+        _ => todo!(),
     }
 }
 

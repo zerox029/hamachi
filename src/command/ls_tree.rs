@@ -1,15 +1,19 @@
-﻿use std::ffi::CStr;
+use crate::object;
+use crate::object::tree::Tree;
+use crate::object::{Hash, Object, ObjectType};
+use std::ffi::CStr;
 use std::io::{BufRead, Read};
 use std::str::FromStr;
-use crate::object;
-use crate::object::{Hash, Object, ObjectType};
-use crate::object::tree::Tree;
 
 /// List the contents of a tree object with the specified hash
 /// https://git-scm.com/docs/git-ls-tree
 pub(crate) fn ls_tree(_name_only: bool, hash: &str) -> (std::io::Result<String>, Tree) {
     let mut tree = Object::from_hash(hash).expect("error here lol");
-    assert_eq!(tree.header.object_type, ObjectType::TREE, "Object was not a tree");
+    assert_eq!(
+        tree.header.object_type,
+        ObjectType::TREE,
+        "Object was not a tree"
+    );
 
     // Read the rest of the file
     let mut read_bytes = 0;
@@ -27,31 +31,46 @@ pub(crate) fn ls_tree(_name_only: bool, hash: &str) -> (std::io::Result<String>,
 }
 
 /// Returns the tree entry at the current position in the tree buffer reader and its size in bytes
-pub(crate) fn get_current_tree_entry(tree: &mut Object) -> Result<(object::tree::Entry, usize), &'static str> {
+pub(crate) fn get_current_tree_entry(
+    tree: &mut Object,
+) -> Result<(object::tree::Entry, usize), &'static str> {
     let mut read_bytes = 0;
 
     let mut entry_buffer = Vec::new();
-    tree.content_buffer_reader.read_until(b'\0', &mut entry_buffer).expect("error reading header");
+    tree.content_buffer_reader
+        .read_until(b'\0', &mut entry_buffer)
+        .expect("error reading header");
     read_bytes += entry_buffer.len();
 
-    let header_string = CStr::from_bytes_with_nul(&entry_buffer).expect("File header missing null byte");
-    let header_string = header_string.to_str().expect("File header contains invalid UTF-8");
+    let header_string =
+        CStr::from_bytes_with_nul(&entry_buffer).expect("File header missing null byte");
+    let header_string = header_string
+        .to_str()
+        .expect("File header contains invalid UTF-8");
 
-    let Some((mode, file_name)) = header_string.split_once(' ') else { panic!{"Entry missing space delimiter"} };
+    let Some((mode, file_name)) = header_string.split_once(' ') else {
+        panic! {"Entry missing space delimiter"}
+    };
     let mode = mode.to_string();
     let file_name = file_name.to_string();
 
     entry_buffer.clear();
     entry_buffer.resize(20, 0);
 
-    tree.content_buffer_reader.read_exact(&mut entry_buffer).expect("error reading header");
+    tree.content_buffer_reader
+        .read_exact(&mut entry_buffer)
+        .expect("error reading header");
     read_bytes += entry_buffer.len();
 
     let mode = object::tree::Mode::from_str(&mode).expect("Invalid mode");
     let entry = object::tree::Entry {
         mode,
         filename: file_name.to_string(),
-        object_type: if mode == object::tree::Mode::DIRECTORY { ObjectType::TREE } else { ObjectType::BLOB },
+        object_type: if mode == object::tree::Mode::DIRECTORY {
+            ObjectType::TREE
+        } else {
+            ObjectType::BLOB
+        },
         hash: Hash(entry_buffer),
     };
 
@@ -60,12 +79,14 @@ pub(crate) fn get_current_tree_entry(tree: &mut Object) -> Result<(object::tree:
 
 #[cfg(test)]
 mod tests {
+    use crate::command::ls_tree::ls_tree;
+    use crate::test_utils::{
+        copy_git_object_file, run_git_command, setup_test_environment, teardown,
+    };
+    use rusty_fork::rusty_fork_test;
     use std::fs;
     use std::fs::File;
     use std::process::Command;
-    use rusty_fork::rusty_fork_test;
-    use crate::command::ls_tree::ls_tree;
-    use crate::test_utils::{copy_git_object_file, run_git_command, setup_test_environment, teardown};
 
     rusty_fork_test! {
         #[test]

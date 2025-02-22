@@ -1,10 +1,10 @@
-﻿use std::fs::File;
+use crate::object::{Hash, Object};
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
+use sha1::{Digest, Sha1};
+use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
-use flate2::Compression;
-use flate2::write::ZlibEncoder;
-use sha1::{Digest, Sha1};
-use crate::object::{Hash, Object};
 
 /// Generates a SHA1 hash for the specified file and writes its compressed version to the disk
 /// if the w flag is used.
@@ -50,16 +50,16 @@ pub(crate) fn hash_object(write: bool, file: &PathBuf) -> std::io::Result<Hash> 
 
 #[cfg(test)]
 mod tests {
+    use crate::command::hash_object::hash_object;
+    use crate::object::Object;
+    use crate::test_utils::{run_git_command, setup_test_environment, teardown};
+    use flate2::read::ZlibDecoder;
+    use rusty_fork::rusty_fork_test;
     use std::fs;
     use std::fs::File;
     use std::io::Read;
     use std::path::{Path, PathBuf};
     use std::process::Command;
-    use flate2::read::ZlibDecoder;
-    use rusty_fork::rusty_fork_test;
-    use crate::command::hash_object::hash_object;
-    use crate::object::Object;
-    use crate::test_utils::{run_git_command, setup_test_environment, teardown};
 
     rusty_fork_test! {
        #[test]
@@ -106,7 +106,7 @@ mod tests {
 
             assert_eq!(expected_hash, actual_hash);
             assert_eq!(expected_file_content, actual_file_content);
-            
+
             teardown(repo).unwrap()
         }
     }

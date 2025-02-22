@@ -1,12 +1,12 @@
-﻿use std::fs;
+use crate::command::hash_object::hash_object;
+use crate::object::tree::{Entry, Mode};
+use crate::object::{Hash, Object, ObjectType};
+use flate2::write::ZlibEncoder;
+use flate2::Compression;
+use sha1::{Digest, Sha1};
+use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use flate2::Compression;
-use flate2::write::ZlibEncoder;
-use sha1::{Digest, Sha1};
-use crate::command::hash_object::hash_object;
-use crate::object::{Hash, Object, ObjectType};
-use crate::object::tree::{Entry, Mode};
 
 pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Hash> {
     let path = path_buf.unwrap_or(PathBuf::from("."));
@@ -24,22 +24,21 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Hash> {
         if metadata.is_file() {
             let hash: Hash = hash_object(true, &path)?;
 
-            let entry = Entry{
+            let entry = Entry {
                 mode: Mode::REGULAR,
                 filename: path.file_name().unwrap().to_string_lossy().to_string(),
                 object_type: ObjectType::BLOB,
                 hash,
             };
             entries.push(entry);
-        }
-        else {
+        } else {
             if &path == &PathBuf::from("./.git") || &path == Path::new("./.hamachi") {
                 continue;
             }
 
             let hash = write_tree(Some(PathBuf::from(&path)))?;
 
-            let entry = Entry{
+            let entry = Entry {
                 mode: Mode::DIRECTORY,
                 filename: path.file_name().unwrap().to_string_lossy().to_string(),
                 object_type: ObjectType::TREE,
@@ -51,14 +50,21 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Hash> {
 
     let mut entry_byte_vectors = Vec::new();
     for mut entry in entries {
-        let mut entry_bytes = format!("{} {}\0", entry.mode as u32, entry.filename).as_bytes().to_vec();
+        let mut entry_bytes = format!("{} {}\0", entry.mode as u32, entry.filename)
+            .as_bytes()
+            .to_vec();
         entry_bytes.append(&mut entry.hash.0);
 
         entry_byte_vectors.push(entry_bytes);
     }
 
-    let entries_section = entry_byte_vectors.into_iter().flatten().collect::<Vec<u8>>();
-    let header = format!("tree {}\0", entries_section.len()).as_bytes().to_vec();
+    let entries_section = entry_byte_vectors
+        .into_iter()
+        .flatten()
+        .collect::<Vec<u8>>();
+    let header = format!("tree {}\0", entries_section.len())
+        .as_bytes()
+        .to_vec();
 
     let mut hasher = Sha1::new();
     Digest::update(&mut hasher, &header);
@@ -76,14 +82,14 @@ pub(crate) fn write_tree(path_buf: Option<PathBuf>) -> std::io::Result<Hash> {
 }
 #[cfg(test)]
 mod tests {
-    use std::fs;
-    use std::fs::File;
-    use std::path::PathBuf;
-    use std::process::{Command};
-    use rusty_fork::rusty_fork_test;
     use crate::command::write_tree::write_tree;
     use crate::object::Object;
     use crate::test_utils::*;
+    use rusty_fork::rusty_fork_test;
+    use std::fs;
+    use std::fs::File;
+    use std::path::PathBuf;
+    use std::process::Command;
 
     rusty_fork_test! {
         #[test]
@@ -107,7 +113,7 @@ mod tests {
 
             let actual_tree_content = Object::decompress_object(&actual_tree_hash, false).unwrap();
             let expected_tree_content = Object::decompress_object(&expected_tree_hash, true).unwrap();
-            
+
             assert_eq!(expected_tree_hash, actual_tree_hash);
             assert_eq!(expected_tree_content, actual_tree_content);
 
