@@ -172,7 +172,10 @@ impl PackFile {
         let mut decompressed_data = Vec::new();
         decompressor.read_to_end(&mut decompressed_data).unwrap();
 
-        parse_ref_delta_file(decompressed_data, &base_hash);
+        let undeltified = parse_ref_delta_file(decompressed_data, &base_hash);
+        let _hash = Self::hash_and_write_object(undeltified);
+
+        println!("HASH IS {_hash}");
 
         (
             decompressor.total_in() as usize + 20,

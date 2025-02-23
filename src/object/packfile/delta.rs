@@ -1,30 +1,51 @@
+use crate::object::{Hash, Object, ObjectType};
 use std::io::Read;
-use crate::object::{Hash, Object};
-use std::ptr::read;
 
-pub fn parse_ref_delta_file(data: Vec<u8>, base_hash: &Hash) {
+pub fn parse_ref_delta_file(data: Vec<u8>, base_hash: &Hash) -> Vec<u8> {
     let mut read_pointer = 0;
-    
-    println!("{}", base_hash);
+
+    // Base object
+    let mut base_object = Object::from_hash(&base_hash.to_string()).unwrap();
+    let mut base_object_content = Vec::new();
+    base_object
+        .content_buffer_reader
+        .read_to_end(&mut base_object_content)
+        .expect("TODO: panic message");
 
     // Parse source size
     let (source_size, read_bytes) = parse_varint(&data[read_pointer..]);
     read_pointer += read_bytes;
 
+    assert_eq!(base_object_content.len(), source_size);
+
     // Parse target source size
     let (target_size, read_bytes) = parse_varint(&data[read_pointer..]);
     read_pointer += read_bytes;
 
-    let de = Object::decompress_object("bc87e7237500a98614f8513a1f5807b2f02c5ded", false);
     let mut undeltified_data = Vec::with_capacity(target_size);
     while read_pointer < data.len() {
-        let (mut parsed_data, read_bytes) = parse_instruction(&data[read_pointer..], base_hash);
+        let (mut parsed_data, read_bytes) =
+            parse_instruction(&data[read_pointer..], &base_object_content);
         read_pointer += read_bytes;
 
         undeltified_data.append(&mut parsed_data);
     }
 
-    println!("here")
+    // TODO: Move this out of here
+    match base_object.header.object_type {
+        ObjectType::BLOB => {
+            todo!()
+        }
+        ObjectType::TREE => {
+            let mut header = format!("tree {}\0", target_size).as_bytes().to_vec();
+            header.append(&mut undeltified_data);
+
+            header
+        }
+        ObjectType::COMMIT => {
+            todo!()
+        }
+    }
 }
 
 fn parse_varint(data: &[u8]) -> (usize, usize) {
@@ -61,7 +82,7 @@ fn parse_variable_size_integer(data: &[u8]) -> Vec<u8> {
     source_size_bits
 }
 
-fn parse_instruction(data: &[u8], base_hash: &Hash) -> (Vec<u8>, usize) {
+fn parse_instruction(data: &[u8], base_object: &Vec<u8>) -> (Vec<u8>, usize) {
     let msb = data.get(0).unwrap() >> 7;
     match msb {
         0b0 => {
@@ -69,9 +90,7 @@ fn parse_instruction(data: &[u8], base_hash: &Hash) -> (Vec<u8>, usize) {
             let len = parsed_data.len() + 1;
             (parsed_data, len)
         }
-        0b1 => {
-            parse_copy_instruction(data, base_hash)
-        }
+        0b1 => parse_copy_instruction(data, base_object),
         _ => {
             panic!(
                 "Something catastrophic happened the universe is probably on the verge of collapse"
@@ -80,7 +99,7 @@ fn parse_instruction(data: &[u8], base_hash: &Hash) -> (Vec<u8>, usize) {
     }
 }
 
-fn parse_copy_instruction(data: &[u8], base_hash: &Hash) -> (Vec<u8>, usize) {
+fn parse_copy_instruction(data: &[u8], base_object: &Vec<u8>) -> (Vec<u8>, usize) {
     let mut read_pointer = 1;
 
     let mut offset_bytes: [u8; 4] = [0, 0, 0, 0];
@@ -102,13 +121,13 @@ fn parse_copy_instruction(data: &[u8], base_hash: &Hash) -> (Vec<u8>, usize) {
     let offset = u32::from_be_bytes(offset_bytes);
     let length = u32::from_be_bytes(length_bytes);
 
-    let orig = Object::from_hash(&base_hash.to_string()).unwrap();
+    let copy_content = &base_object[offset as usize..(offset + length) as usize];
 
-    (vec![5; length as usize], read_pointer)
+    (copy_content.to_vec(), read_pointer)
 }
 
 fn parse_insert_instruction(data: &[u8]) -> Vec<u8> {
     let size = data.get(0).unwrap() & 0b1111111;
-    
+
     data[1..size as usize + 1].to_vec()
 }

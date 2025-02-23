@@ -9,6 +9,7 @@ use crate::command::commit_tree::commit_tree;
 use crate::command::hash_object::hash_object;
 use crate::command::ls_tree::ls_tree;
 use crate::command::write_tree::write_tree;
+use crate::object::Object;
 use clap::Parser;
 use command::config::config;
 use command::{Args, Command};
@@ -16,7 +17,6 @@ use rand::RngCore;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
-use crate::object::Object;
 
 fn main() {
     let args = Args::parse();
